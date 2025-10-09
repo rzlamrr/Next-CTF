@@ -1,0 +1,234 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// For Supabase, use:
+// datasource db {
+//   provider = "postgresql"
+//   url      = env("SUPABASE_URL")
+//   shadowDatabaseUrl = env("SHADOW_DATABASE_URL")
+// }
+
+model User {
+  id        String   @id @default(cuid())
+  name      String
+  email     String   @unique
+  password  String
+  role      Role     @default(USER)
+  teamId    String?
+  team      Team?    @relation(fields: [teamId], references: [id])
+  
+  submissions Submission[]
+  solves      Solve[]
+  awards      Award[]
+  notifications Notification[]
+  accounts    Account[]
+  sessions    Session[]
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Team {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  description String?
+  captainId   String
+  password    String?
+  members     User[]
+  
+  submissions Submission[]
+  solves      Solve[]
+  awards      Award[]
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Challenge {
+  id           String        @id @default(cuid())
+  name         String
+  description  String
+  category     String
+  difficulty   Difficulty
+  points       Int
+  flag         String
+  maxAttempts  Int?
+  type         ChallengeType @default(STANDARD)
+  value        Int?
+  decay        Int?
+  minimum      Int?
+  
+  hints        Hint[]
+  submissions  Submission[]
+  solves       Solve[]
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Hint {
+  id          String @id @default(cuid())
+  content     String
+  cost        Int
+  challengeId String
+  challenge   Challenge @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+  
+  createdAt DateTime @default(now())
+}
+
+model Submission {
+  id          String           @id @default(cuid())
+  userId      String
+  user        User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  teamId      String?
+  team        Team?            @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  challengeId String
+  challenge   Challenge        @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+  flag        String
+  status      SubmissionStatus @default(PENDING)
+  
+  createdAt DateTime @default(now())
+  
+  @@unique([userId, challengeId])
+  @@unique([teamId, challengeId])
+}
+
+model Solve {
+  id          String  @id @default(cuid())
+  userId      String
+  user        User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  teamId      String?
+  team        Team?   @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  challengeId String
+  challenge   Challenge @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+  
+  createdAt DateTime @default(now())
+  
+  @@unique([userId, challengeId])
+  @@unique([teamId, challengeId])
+}
+
+model Config {
+  id          String      @id @default(cuid())
+  key         String      @unique
+  value       String
+  type        ConfigType  @default(STRING)
+  description String?
+  editable    Boolean     @default(true)
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Page {
+  id           String   @id @default(cuid())
+  title        String
+  route        String   @unique
+  content      String
+  draft        Boolean  @default(false)
+  hidden       Boolean  @default(false)
+  authRequired Boolean  @default(false)
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title     String
+  content   String
+  read      Boolean  @default(false)
+  
+  createdAt DateTime @default(now())
+}
+
+model Award {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  teamId      String?
+  team        Team?    @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  name        String
+  description String?
+  category    String
+  value       Int
+  icon        String?
+  
+  createdAt DateTime @default(now())
+}
+
+// NextAuth.js models
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+enum Role {
+  USER
+  ADMIN
+}
+
+enum Difficulty {
+  EASY
+  MEDIUM
+  HARD
+  INSANE
+}
+
+enum ChallengeType {
+  STANDARD
+  DYNAMIC
+}
+
+enum SubmissionStatus {
+  CORRECT
+  INCORRECT
+  PENDING
+}
+
+enum ConfigType {
+  STRING
+  NUMBER
+  BOOLEAN
+}
