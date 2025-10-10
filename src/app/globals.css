@@ -1,26 +1,172 @@
-@import "tailwindcss";
+@import 'tailwindcss';
+@theme {
+  --color-background: hsl(var(--background));
+  --color-foreground: hsl(var(--foreground));
+  --color-card: hsl(var(--card));
+  --color-card-foreground: hsl(var(--card-foreground));
+  --color-popover: hsl(var(--popover));
+  --color-popover-foreground: hsl(var(--popover-foreground));
+  --color-primary: hsl(var(--primary));
+  --color-primary-foreground: hsl(var(--primary-foreground));
+  --color-secondary: hsl(var(--secondary));
+  --color-secondary-foreground: hsl(var(--secondary-foreground));
+  --color-muted: hsl(var(--muted));
+  --color-muted-foreground: hsl(var(--muted-foreground));
+  --color-accent: hsl(var(--accent));
+  --color-accent-foreground: hsl(var(--accent-foreground));
+  --color-destructive: hsl(var(--destructive));
+  --color-destructive-foreground: hsl(var(--destructive-foreground));
+  --color-border: hsl(var(--border));
+  --color-input: hsl(var(--input));
+  --color-ring: hsl(var(--ring));
+  --color-success: hsl(var(--success));
+  --color-success-foreground: hsl(var(--success-foreground));
+  --color-warning: hsl(var(--warning));
+  --color-warning-foreground: hsl(var(--warning-foreground));
+  --color-info: hsl(var(--info));
+  --color-info-foreground: hsl(var(--info-foreground));
+  --color-danger: hsl(var(--danger));
+  --color-danger-foreground: hsl(var(--danger-foreground));
+  --color-purple: hsl(var(--purple));
+  --color-purple-foreground: hsl(var(--purple-foreground));
+}
 
+/* Light theme (Cyberstorm red theme) */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: 240 33% 96%;
+  --foreground: 240 4% 11%;
+  --card: 0 0% 100%;
+  --card-foreground: 240 4% 11%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 240 4% 11%;
+  --primary: 0 100% 40%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 0 68.5% 41.6%;
+  --secondary-foreground: 0 0% 100%;
+  --muted: 240 20% 92%;
+  --muted-foreground: 240 4% 40%;
+  --accent: 0 100% 40%;
+  --accent-foreground: 0 0% 100%;
+  --destructive: 2 100% 60%;
+  --destructive-foreground: 0 0% 100%;
+  --border: 240 10% 85%;
+  --input: 240 10% 85%;
+  --ring: 0 100% 40%;
+  --success: 145 63% 49%;
+  --success-foreground: 0 0% 100%;
+  --warning: 35 100% 50%;
+  --warning-foreground: 0 0% 100%;
+  --info: 211 100% 50%;
+  --info-foreground: 0 0% 100%;
+  --danger: 2 100% 60%;
+  --danger-foreground: 0 0% 100%;
+  --purple: 270 60% 50%;
+  --purple-foreground: 0 0% 100%;
+  --radius: 0.75rem;
+
+  /* Border radius variables */
+  --radius-sm: 0.5rem;
+  --radius-md: 0.75rem;
+  --radius-lg: 1rem;
+  --radius-xl: 1.5rem;
+  --radius-2xl: 2rem;
+
+  /* Shadow variables */
+  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.08);
+  --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.12);
+  --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.16);
+  --shadow-xl: 0 12px 48px rgba(0, 0, 0, 0.2);
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+/* Dark theme (Cyberstorm red accent) */
+.dark {
+  --background: 0 0% 0%;
+  --foreground: 0 0% 96%;
+  --card: 0 0% 3%;
+  --card-foreground: 0 0% 96%;
+  --popover: 0 0% 3%;
+  --popover-foreground: 0 0% 96%;
+  --primary: 0 100% 40%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 0 68.5% 41.6%;
+  --secondary-foreground: 0 0% 100%;
+  --muted: 0 0% 10%;
+  --muted-foreground: 0 0% 65%;
+  --accent: 0 100% 40%;
+  --accent-foreground: 0 0% 100%;
+  --destructive: 2 100% 60%;
+  --destructive-foreground: 0 0% 100%;
+  --border: 0 0% 15%;
+  --input: 0 0% 10%;
+  --ring: 0 100% 40%;
+  --success: 145 63% 49%;
+  --success-foreground: 0 0% 100%;
+  --warning: 35 100% 50%;
+  --warning-foreground: 0 0% 0%;
+  --info: 211 100% 50%;
+  --info-foreground: 0 0% 100%;
+  --danger: 2 100% 60%;
+  --danger-foreground: 0 0% 100%;
+  --purple: 270 70% 65%;
+  --purple-foreground: 0 0% 100%;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+/* Base body without @apply to avoid unknown utility at build */
+body {
+  background-color: hsl(var(--background));
+  color: hsl(var(--foreground));
+  font-family: -apple-system, "SF Pro Display", "Inter", system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+/* Animations */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
+
+.fade-in {
+  animation: fadeIn 0.5s ease-in-out;
+}
+
+.slide-up {
+  animation: slideUp 0.3s ease-out;
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: hsl(var(--muted));
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: hsl(var(--border));
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--primary));
+}
+

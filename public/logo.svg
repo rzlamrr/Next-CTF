@@ -1,0 +1,16 @@
+<svg width="80" height="80" viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Shield outline -->
+  <path d="M40 5L10 20V40C10 57 22 70 40 75C58 70 70 57 70 40V20L40 5Z" fill="#1a1a1a" stroke="#dc2626" stroke-width="2"/>
+
+  <!-- Inner shield -->
+  <path d="M40 10L15 22V40C15 54 25 65 40 70C55 65 65 54 65 40V22L40 10Z" fill="#0a0a0a"/>
+
+  <!-- Lightning bolt -->
+  <path d="M43 25H35L32 40H38L35 55L50 38H43L48 25Z" fill="#dc2626"/>
+
+  <!-- Accent lines -->
+  <line x1="25" y1="35" x2="30" y2="35" stroke="#dc2626" stroke-width="1" opacity="0.5"/>
+  <line x1="50" y1="35" x2="55" y2="35" stroke="#dc2626" stroke-width="1" opacity="0.5"/>
+  <line x1="22" y1="45" x2="27" y2="45" stroke="#dc2626" stroke-width="1" opacity="0.3"/>
+  <line x1="53" y1="45" x2="58" y2="45" stroke="#dc2626" stroke-width="1" opacity="0.3"/>
+</svg>

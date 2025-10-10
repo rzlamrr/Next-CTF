@@ -29,13 +29,15 @@ export function formatRelativeTime(date: Date | string): string {
   if (diffMins < 60) return `${diffMins} minute${diffMins > 1 ? 's' : ''} ago`
   if (diffHours < 24) return `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`
   if (diffDays < 7) return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`
-  
+
   return formatDate(date)
 }
 
 export function generateId(): string {
-  return Math.random().toString(36).substring(2, 15) + 
-         Math.random().toString(36).substring(2, 15)
+  return (
+    Math.random().toString(36).substring(2, 15) +
+    Math.random().toString(36).substring(2, 15)
+  )
 }
 
 export function getFlagRegex(pattern: string): RegExp {
@@ -58,10 +60,10 @@ export function calculateDynamicScore(
   solves: number
 ): number {
   if (solves === 0) return initialPoints
-  
+
   const decay = initialPoints - minimumPoints
   const coefficient = decay / (decayLimit * decayLimit)
   const points = initialPoints - coefficient * solves * solves
-  
+
   return Math.max(Math.floor(points), minimumPoints)
 }

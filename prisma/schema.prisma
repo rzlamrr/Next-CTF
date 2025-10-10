@@ -10,28 +10,29 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// For Supabase, use:
-// datasource db {
-//   provider = "postgresql"
-//   url      = env("SUPABASE_URL")
-//   shadowDatabaseUrl = env("SHADOW_DATABASE_URL")
-// }
 
 model User {
-  id        String   @id @default(cuid())
-  name      String
-  email     String   @unique
-  password  String
-  role      Role     @default(USER)
-  teamId    String?
-  team      Team?    @relation(fields: [teamId], references: [id])
+  id           String   @id @default(cuid())
+  name         String
+  email        String   @unique
+  password     String
+  role         Role     @default(USER)
+  website      String?
+  affiliation  String?
+  country      String?
+  teamId       String?
+  team         Team?    @relation(fields: [teamId], references: [id])
   
-  submissions Submission[]
-  solves      Solve[]
-  awards      Award[]
+  submissions   Submission[]
+  solves        Solve[]
+  awards        Award[]
   notifications Notification[]
-  accounts    Account[]
-  sessions    Session[]
+  accounts      Account[]
+  sessions      Session[]
+  fieldEntries  FieldEntry[]
+  comments      Comment[]
+  ratings       Rating[]
+  unlocks       Unlock[]
   
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -48,9 +49,51 @@ model Team {
   submissions Submission[]
   solves      Solve[]
   awards      Award[]
+  fieldEntries FieldEntry[]
+  unlocks     Unlock[]
   
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+model Bracket {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  
+  challenges Challenge[]
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Tag {
+  id        String @id @default(cuid())
+  name      String @unique
+  color     String?
+  
+  challenges Challenge[]
+  
+  createdAt DateTime @default(now())
+}
+
+model Topic {
+  id        String @id @default(cuid())
+  name      String @unique
+  category  String
+  
+  challenges Challenge[]
+  
+  createdAt DateTime @default(now())
+}
+
+model File {
+  id           String  @id @default(cuid())
+  location     String
+  challengeId  String
+  challenge    Challenge @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+  
+  createdAt DateTime @default(now())
 }
 
 model Challenge {
@@ -63,26 +106,40 @@ model Challenge {
   flag         String
   maxAttempts  Int?
   type         ChallengeType @default(STANDARD)
+  function     ScoringFunction @default(static)
   value        Int?
   decay        Int?
   minimum      Int?
+  connectionInfo String?
+  requirements String?
   
   hints        Hint[]
   submissions  Submission[]
   solves       Solve[]
+  files        File[]
+  tags         Tag[]
+  topics       Topic[]
+  ratings      Rating[]
+  solution     Solution?
+  bracketId    String?
+  bracket      Bracket?     @relation(fields: [bracketId], references: [id])
+  comments     Comment[]
   
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
 
 model Hint {
-  id          String @id @default(cuid())
-  content     String
-  cost        Int
-  challengeId String
-  challenge   Challenge @relation(fields: [challengeId], references: [id], onDelete: Cascade)
-  
-  createdAt DateTime @default(now())
+  id           String @id @default(cuid())
+  title        String
+  content      String
+  cost         Int
+  type         String?
+  requirements String?
+  challengeId  String
+  challenge    Challenge @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+
+  createdAt    DateTime @default(now())
 }
 
 model Submission {
@@ -127,6 +184,59 @@ model Config {
   
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+model Field {
+  id          String      @id @default(cuid())
+  name        String
+  type        FieldType   @default(TEXT)
+  required    Boolean     @default(false)
+  description String?
+  
+  fieldEntries FieldEntry[]
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model FieldEntry {
+  id       String
+  value    String
+  fieldId  String
+  field    Field @relation(fields: [fieldId], references: [id], onDelete: Cascade)
+  userId   String
+  user     User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  teamId   String?
+  team     Team? @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  @@id([id, fieldId, userId])
+}
+
+model Comment {
+  id        String   @id @default(cuid())
+  content   String
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  challengeId String
+  challenge Challenge @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Unlock {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  teamId      String?
+  team        Team?    @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  targetId    String
+  type        UnlockType
+  
+  createdAt DateTime @default(now())
 }
 
 model Page {
@@ -204,6 +314,30 @@ model VerificationToken {
   @@unique([identifier, token])
 }
 
+model Rating {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  challengeId String
+  challenge   Challenge @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+  value       Int
+  review      String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@unique([userId, challengeId])
+}
+
+model Solution {
+  id          String   @id @default(cuid())
+  challengeId String   @unique
+  challenge   Challenge @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+  content     String
+  state       String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
 enum Role {
   USER
   ADMIN
@@ -221,6 +355,13 @@ enum ChallengeType {
   DYNAMIC
 }
 
+enum ScoringFunction {
+  static
+  log
+  exp
+  linear
+}
+
 enum SubmissionStatus {
   CORRECT
   INCORRECT
@@ -231,4 +372,19 @@ enum ConfigType {
   STRING
   NUMBER
   BOOLEAN
+}
+
+enum FieldType {
+  TEXT
+  BOOLEAN
+  NUMBER
+  SELECT
+  CHECKBOX
+  TEXTAREA
+}
+
+enum UnlockType {
+  HINTS
+  CHALLENGES
+  AWARDS
 }

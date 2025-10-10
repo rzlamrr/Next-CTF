@@ -48,3 +48,10 @@ yarn-error.log*
 next-env.d.ts
 
 /src/generated/prisma
+
+.uploads
+
+.claude
+.kilocode
+.mcp.json
+CLAUDE.md
