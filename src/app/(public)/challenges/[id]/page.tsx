@@ -20,9 +20,14 @@ type ChallengeDetail = {
   category: string
   difficulty: Difficulty
   type: CType
-  tags: string[]
-  topics: string[]
   hints: Array<{ id: string; cost: number }>
+}
+
+type FileItem = {
+  id: string
+  type: string | null
+  location: string
+  sha1sum: string | null
 }
 
 async function fetchChallenge(id: string): Promise<ChallengeDetail | null> {
@@ -35,6 +40,19 @@ async function fetchChallenge(id: string): Promise<ChallengeDetail | null> {
     return null
   } catch {
     return null
+  }
+}
+
+async function fetchFiles(id: string): Promise<FileItem[]> {
+  const base = process.env.NEXT_PUBLIC_BASE_URL ?? ''
+  const url = `${base}/api/challenges/${encodeURIComponent(id)}/files`
+  try {
+    const res = await fetch(url, { cache: 'no-store' })
+    const json = (await res.json()) as Envelope<FileItem[]>
+    if (json.success) return json.data ?? []
+    return []
+  } catch {
+    return []
   }
 }
 
@@ -68,7 +86,7 @@ export default async function Page({
   params: Promise<{ id: string }>
 }) {
   const { id } = await params
-  const data = await fetchChallenge(id)
+  const [data, files] = await Promise.all([fetchChallenge(id), fetchFiles(id)])
 
   return (
     <main className="mx-auto max-w-5xl px-4 py-8">
@@ -118,37 +136,26 @@ export default async function Page({
               </div>
             </div>
 
-            {data.tags?.length || data.topics?.length ? (
-              <div className="rounded-lg border border-border bg-card p-4">
-                <div className="flex flex-wrap items-center gap-2">
-                  {data.tags?.length ? (
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-semibold text-foreground">
-                        Tags:
-                      </span>
-                      {data.tags.map(t => (
-                        <Badge key={`tag-${t}`} color="gray">
-                          {t}
-                        </Badge>
-                      ))}
-                    </div>
-                  ) : null}
-                  {data.topics?.length ? (
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-semibold text-foreground">
-                        Topics:
-                      </span>
-                      {data.topics.map(t => (
-                        <Badge key={`topic-${t}`} color="green">
-                          {t}
-                        </Badge>
-                      ))}
-                    </div>
-                  ) : null}
-                </div>
-              </div>
-            ) : null}
           </section>
+
+          {files.length > 0 && (
+            <section className="mt-6">
+              <h2 className="text-sm font-semibold text-foreground">Files</h2>
+              <ul className="mt-2 space-y-2">
+                {files.map(f => {
+                  const filename = f.location.split('/').pop() || 'file'
+                  const href = `/api/files/${encodeURIComponent(f.id)}/download`
+                  return (
+                    <li key={f.id}>
+                      <a href={href} className="text-sm text-primary hover:underline">
+                        {filename}
+                      </a>
+                    </li>
+                  )
+                })}
+              </ul>
+            </section>
+          )}
 
           <section className="mt-6">
             <h2 className="text-sm font-semibold text-foreground">

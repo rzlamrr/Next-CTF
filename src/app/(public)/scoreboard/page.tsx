@@ -1,4 +1,5 @@
 import GradientBanner from '@/components/ui/gradient-banner'
+import { getConfig } from '@/lib/db/queries'
 
 type SuccessEnvelope<T> = { success: true; data: T }
 type ErrorEnvelope = {
@@ -103,11 +104,17 @@ export default async function Page({
 
   const data = await fetchScoreboard(top)
 
+  const teamModeConfig = await getConfig('team_mode')
+  const teamModeEnabled =
+    teamModeConfig?.value?.toLowerCase?.() === 'true'
+  const teamSectionVisible =
+    !!(data && teamModeEnabled && data.teams.length > 0)
+
   return (
     <>
       <GradientBanner
         title="Scoreboard"
-        subtitle={`Top ${top} users and teams by score.`}
+        subtitle={`Top ${top} users${teamSectionVisible ? ' and teams' : ''} by score.`}
       />
 
       <main className="px-4 py-8">
@@ -116,8 +123,8 @@ export default async function Page({
             Failed to load scoreboard. Please try again.
           </div>
         ) : (
-          <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-            <section aria-labelledby="users-leaderboard">
+          <div className={teamSectionVisible ? 'grid grid-cols-1 gap-6 lg:grid-cols-2' : 'grid grid-cols-1 gap-6 justify-items-center'}>
+            <section aria-labelledby="users-leaderboard" className={teamSectionVisible ? '' : 'w-full max-w-3xl'}>
               <h2
                 id="users-leaderboard"
                 className="mb-2 text-sm font-semibold text-foreground"
@@ -147,33 +154,35 @@ export default async function Page({
               />
             </section>
 
-            <section aria-labelledby="teams-leaderboard">
-              <h2
-                id="teams-leaderboard"
-                className="mb-2 text-sm font-semibold text-foreground"
-              >
-                Teams Leaderboard
-              </h2>
-              <Table
-                caption="Teams leaderboard"
-                columns={['Rank', 'Team', 'Score']}
-                rows={data.teams}
-                emptyMessage="No teams to display yet."
-                renderCell={(row, cIndex) => {
-                  const r = row as TeamRow
-                  switch (cIndex) {
-                    case 0:
-                      return data.teams.indexOf(r) + 1
-                    case 1:
-                      return r.name || r.id
-                    case 2:
-                      return r.score
-                    default:
-                      return ''
-                  }
-                }}
-              />
-            </section>
+            {teamSectionVisible && (
+              <section aria-labelledby="teams-leaderboard">
+                <h2
+                  id="teams-leaderboard"
+                  className="mb-2 text-sm font-semibold text-foreground"
+                >
+                  Teams Leaderboard
+                </h2>
+                <Table
+                  caption="Teams leaderboard"
+                  columns={['Rank', 'Team', 'Score']}
+                  rows={data.teams}
+                  emptyMessage="No teams to display yet."
+                  renderCell={(row, cIndex) => {
+                    const r = row as TeamRow
+                    switch (cIndex) {
+                      case 0:
+                        return data.teams.indexOf(r) + 1
+                      case 1:
+                        return r.name || r.id
+                      case 2:
+                        return r.score
+                      default:
+                        return ''
+                    }
+                  }}
+                />
+              </section>
+            )}
           </div>
         )}
       </main>

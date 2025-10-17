@@ -29,7 +29,7 @@ const config: Config = {
     '/node_modules/',
     '<rootDir>/.next/',
     '<rootDir>/build/',
-    '<rootDir>/prisma/migrations/',
+    '<rootDir>/supabase/migrations/',
   ],
   coverageThreshold: {
     global: {

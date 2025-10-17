@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { attachUserToTeam, getConfig } from '@/lib/db/queries'
-import { prisma } from '@/lib/db'
+import { supabase } from '@/lib/db'
 import { compare } from 'bcryptjs'
 
 // POST /api/teams/join - Join a team
@@ -55,13 +55,14 @@ export async function POST(req: NextRequest) {
     }
 
     // Check if user is already in a team
-    const user = await prisma.user.findUnique({
-      where: { id: session.user.id },
-      select: { teamId: true },
-    })
-    console.info('[Teams][join] preJoin user', { teamId: user?.teamId })
+    const { data: user, error: userError } = await supabase
+      .from('users')
+      .select('team_id')
+      .eq('id', session.user.id)
+      .single()
+    console.info('[Teams][join] preJoin user', { teamId: user?.team_id })
 
-    if (user?.teamId) {
+    if (user?.team_id) {
       return NextResponse.json(
         {
           success: false,
@@ -75,12 +76,14 @@ export async function POST(req: NextRequest) {
     }
 
     // Get team
-    const team = await prisma.team.findUnique({
-      where: { id: teamId },
-    })
+    const { data: team, error: teamError } = await supabase
+      .from('teams')
+      .select('*')
+      .eq('id', teamId)
+      .single()
     console.info('[Teams][join] team lookup', { found: !!team, teamId })
 
-    if (!team) {
+    if (teamError || !team) {
       return NextResponse.json(
         {
           success: false,
@@ -129,12 +132,13 @@ export async function POST(req: NextRequest) {
     await attachUserToTeam(session.user.id, teamId)
 
     // Diagnostics: confirm user now has teamId
-    const updatedUser = await prisma.user.findUnique({
-      where: { id: session.user.id },
-      select: { teamId: true },
-    })
+    const { data: updatedUser } = await supabase
+      .from('users')
+      .select('team_id')
+      .eq('id', session.user.id)
+      .single()
     console.info('[Teams][join] postJoin user', {
-      teamId: updatedUser?.teamId,
+      teamId: updatedUser?.team_id,
     })
 
     return NextResponse.json({

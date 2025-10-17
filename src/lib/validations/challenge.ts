@@ -32,8 +32,6 @@ export const ChallengeCreateSchema = z
     // nextId is accepted per API spec but is not used by current Prisma schema
     nextId: z.string().optional(),
     maxAttempts: PosInt.optional(),
-    tags: z.array(z.string().min(1)).optional(),
-    topics: z.array(z.string().min(1)).optional(),
     connectionInfo: z.string().optional(),
     requirements: z.string().optional(),
   })
@@ -69,8 +67,6 @@ export const ChallengeUpdateSchema = z
     bracketId: z.string().optional(),
     nextId: z.string().optional(),
     maxAttempts: PosInt.optional(),
-    tags: z.array(z.string().min(1)).optional(),
-    topics: z.array(z.string().min(1)).optional(),
     connectionInfo: z.string().optional(),
     requirements: z.string().optional(),
   })

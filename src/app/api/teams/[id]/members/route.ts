@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { removeMemberFromTeam, addMemberToTeam } from '@/lib/db/queries'
-import { prisma } from '@/lib/db'
+import { supabase } from '@/lib/db'
 
 type RouteContext = {
   params: Promise<{ id: string }>
@@ -40,11 +40,13 @@ export async function DELETE(
     }
 
     // Get team
-    const team = await prisma.team.findUnique({
-      where: { id: teamId },
-    })
+    const { data: team, error } = await supabase
+      .from('teams')
+      .select('*')
+      .eq('id', teamId)
+      .single()
 
-    if (!team) {
+    if (error || !team) {
       return NextResponse.json(
         {
           success: false,
@@ -55,7 +57,7 @@ export async function DELETE(
     }
 
     // Only captain can kick members
-    if (team.captainId !== session.user.id) {
+    if (team.captain_id !== session.user.id) {
       return NextResponse.json(
         {
           success: false,
@@ -80,12 +82,13 @@ export async function DELETE(
     }
 
     // Check if member is in this team
-    const member = await prisma.user.findUnique({
-      where: { id: memberId },
-      select: { teamId: true },
-    })
+    const { data: member, error: memberError } = await supabase
+      .from('users')
+      .select('team_id')
+      .eq('id', memberId)
+      .single()
 
-    if (member?.teamId !== teamId) {
+    if (memberError || member?.team_id !== teamId) {
       return NextResponse.json(
         {
           success: false,
@@ -140,12 +143,16 @@ export async function POST(
     const { id: teamId } = await context.params
 
     // Lookup team with members
-    const team = await prisma.team.findUnique({
-      where: { id: teamId },
-      include: { members: true },
-    })
+    const { data: team, error } = await supabase
+      .from('teams')
+      .select(`
+        *,
+        members:users(*)
+      `)
+      .eq('id', teamId)
+      .single()
 
-    if (!team) {
+    if (error || !team) {
       return NextResponse.json(
         {
           success: false,
@@ -156,7 +163,7 @@ export async function POST(
     }
 
     // Only captain can add members
-    if (team.captainId !== session.user.id) {
+    if (team.captain_id !== session.user.id) {
       return NextResponse.json(
         {
           success: false,
@@ -180,12 +187,13 @@ export async function POST(
     }
 
     // Check target user
-    const target = await prisma.user.findUnique({
-      where: { id: userId },
-      select: { id: true, name: true, email: true, teamId: true },
-    })
+    const { data: target, error: targetError } = await supabase
+      .from('users')
+      .select('id, name, email, team_id')
+      .eq('id', userId)
+      .single()
 
-    if (!target) {
+    if (targetError || !target) {
       return NextResponse.json(
         {
           success: false,
@@ -196,7 +204,7 @@ export async function POST(
     }
 
     // Already in a different team
-    if (target.teamId && target.teamId !== teamId) {
+    if (target.team_id && target.team_id !== teamId) {
       return NextResponse.json(
         {
           success: false,
@@ -210,7 +218,7 @@ export async function POST(
     }
 
     // Already in this team -> succeed idempotently
-    if (target.teamId === teamId) {
+    if (target.team_id === teamId) {
       return NextResponse.json({
         success: true,
         data: { member: { id: target.id, name: target.name, email: target.email } },
@@ -220,10 +228,11 @@ export async function POST(
     // Attach user to this team
     await addMemberToTeam(teamId, userId)
 
-    const added = await prisma.user.findUnique({
-      where: { id: userId },
-      select: { id: true, name: true, email: true },
-    })
+    const { data: added } = await supabase
+      .from('users')
+      .select('id, name, email')
+      .eq('id', userId)
+      .single()
 
     return NextResponse.json({
       success: true,

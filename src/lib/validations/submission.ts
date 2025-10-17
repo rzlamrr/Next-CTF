@@ -1,7 +1,8 @@
 import { z } from 'zod'
 
 export const FlagSubmitSchema = z.object({
-  challengeId: z.string().min(1, 'challengeId is required'),
+  // Enforce UUID to prevent Postgres "invalid input syntax for type uuid" errors
+  challengeId: z.string().uuid('challengeId must be a valid UUID'),
   flag: z.string().min(1, 'flag is required'),
 })
 

@@ -10,7 +10,7 @@
 
 import { ok, toErrorResponse } from '@/lib/utils/http'
 import { requireAdmin } from '@/lib/auth/guards'
-import { prisma } from '@/lib/db'
+import { supabase } from '@/lib/db'
 import { updateChallengeValue } from '@/lib/db/queries'
 
 // POST /api/challenges/recalculate
@@ -18,12 +18,14 @@ export async function POST(): Promise<Response> {
   try {
     await requireAdmin()
 
-    const dynamicChallenges = await prisma.challenge.findMany({
-      where: { type: 'DYNAMIC' },
-      select: { id: true },
-    })
+    const { data: dynamicChallenges, error } = await supabase
+      .from('challenges')
+      .select('id')
+      .eq('type', 'DYNAMIC')
 
-    const ids = dynamicChallenges.map((c: { id: string }) => c.id)
+    if (error) throw error
+
+    const ids = (dynamicChallenges ?? []).map((c: { id: string }) => c.id)
 
     const updatedIds: string[] = []
     for (const id of ids) {

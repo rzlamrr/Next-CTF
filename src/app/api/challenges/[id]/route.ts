@@ -3,15 +3,15 @@
  *
  * GET /api/challenges/:id
  * - Public
- * - Returns details: { id, name, description, value, category, difficulty, type, tags, topics, hints }
+ * - Returns details: { id, name, description, value, category, difficulty, type, hints }
  * - Example:
  *   Request: GET /api/challenges/abc123
- *   Response: { "success": true, "data": { "id":"abc123","name":"...","value":100,"category":"web","tags":["pwn"],"topics":["heap"],"hints":[{"id":"...","cost":10}] } }
+ *   Response: { "success": true, "data": { "id":"abc123","name":"...","value":100,"category":"web","hints":[{"id":"...","cost":10}] } }
  *
  * PATCH /api/challenges/:id
  * - Admin only
  * - Body: ChallengeUpdateSchema (partial fields)
- * - Updates base fields; tags/topics handled via attach helpers
+ * - Updates base fields
  *
  * DELETE /api/challenges/:id
  * - Admin only
@@ -24,8 +24,6 @@ import {
   getChallengeById,
   updateChallenge,
   deleteChallenge,
-  attachTagsToChallenge,
-  attachTopicsToChallenge,
 } from '@/lib/db/queries'
 import { ChallengeUpdateSchema } from '@/lib/validations/challenge'
 
@@ -60,8 +58,6 @@ export async function GET(
       function: c.function,
       minimum: c.minimum,
       decay: c.decay,
-      tags: (c.tags ?? []).map((t: { name: string }) => t.name),
-      topics: (c.topics ?? []).map((t: { name: string }) => t.name),
       hints: (c.hints ?? []).map((h: { id: string; cost: number }) => ({
         id: h.id,
         cost: h.cost,
@@ -84,10 +80,7 @@ export async function PATCH(
     const { id } = await ctx.params
     const body = await parseJson(req, ChallengeUpdateSchema)
 
-    // Separate relational fields from base update
-    const { tags, topics, ...base } = body as {
-      tags?: string[]
-      topics?: string[]
+    const base = body as {
       [k: string]: unknown
     }
 
@@ -102,13 +95,6 @@ export async function PATCH(
     // Apply base update
     const updated = await updateChallenge(id, base)
 
-    // Apply tags/topics attach-or-create if provided
-    if (tags && Array.isArray(tags) && tags.length) {
-      await attachTagsToChallenge(id, tags)
-    }
-    if (topics && Array.isArray(topics) && topics.length) {
-      await attachTopicsToChallenge(id, topics)
-    }
 
     // Refetch for response
     const c = await getChallengeById(id)
@@ -132,8 +118,6 @@ export async function PATCH(
       function: c.function,
       minimum: c.minimum,
       decay: c.decay,
-      tags: (c.tags ?? []).map((t: { name: string }) => t.name),
-      topics: (c.topics ?? []).map((t: { name: string }) => t.name),
       hints: (c.hints ?? []).map((h: { id: string; cost: number }) => ({
         id: h.id,
         cost: h.cost,

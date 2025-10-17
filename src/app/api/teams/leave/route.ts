@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { removeMemberFromTeam, getConfig } from '@/lib/db/queries'
-import { prisma } from '@/lib/db'
+import { supabase } from '@/lib/db'
 
 // POST /api/teams/leave - Leave current team
 export async function POST(req: NextRequest) {
@@ -33,12 +33,16 @@ export async function POST(req: NextRequest) {
     }
 
     // Check if user is in a team
-    const user = await prisma.user.findUnique({
-      where: { id: session.user.id },
-      select: { teamId: true, team: { select: { captainId: true } } },
-    })
+    const { data: user, error } = await supabase
+      .from('users')
+      .select(`
+        team_id,
+        team:teams(captain_id)
+      `)
+      .eq('id', session.user.id)
+      .single()
 
-    if (!user?.teamId) {
+    if (!user?.team_id) {
       return NextResponse.json(
         {
           success: false,
@@ -48,8 +52,9 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    // Check if user is captain
-    if (user.team?.captainId === session.user.id) {
+    // Check if user is captain - need to safely access team
+    const team = user.team as any
+    if (team?.captain_id === session.user.id) {
       return NextResponse.json(
         {
           success: false,

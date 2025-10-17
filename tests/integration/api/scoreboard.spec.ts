@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeAll } from '@jest/globals'
 import { GET as getScoreboard } from '@/app/api/scoreboard/route'
-import { prisma } from '@/lib/db'
+import { supabase } from '@/lib/db'
+import { createTeam, grantAward } from '@/lib/db/queries'
 import { resetDb, seedBasic, jsonRequest, readJson } from './utils'
 
 type UserRow = {
@@ -26,36 +27,38 @@ describe('API /api/scoreboard', () => {
     dynChallenge = seeded.dynChallenge
 
     // Create a team and attach user for team scoreboard
-    const team = await prisma.team.create({
-      data: {
-        name: 'Team One',
-        description: 'Integration Team',
-        captainId: admin.id,
-      },
-      select: { id: true },
-    })
-    await prisma.user.update({
-      where: { id: user.id },
-      data: { teamId: team.id },
+    const team = await createTeam({
+      name: 'Team One',
+      description: 'Integration Team',
+      captainId: admin.id,
     })
 
+    await supabase
+      .from('users')
+      .update({ team_id: team.id })
+      .eq('id', user.id)
+
     // Give user some solves and awards for deterministic scores
-    await prisma.solve.create({
-      data: { userId: user.id, challengeId: stdChallenge.id },
+    await supabase.from('solves').insert({
+      user_id: user.id,
+      team_id: team.id,
+      challenge_id: stdChallenge.id,
     })
-    await prisma.award.create({
-      data: { userId: user.id, name: 'Bonus', category: 'bonus', value: 50 },
+
+    await grantAward({
+      userId: user.id,
+      name: 'Bonus',
+      category: 'bonus',
+      value: 50,
     })
 
     // Give team an award too
-    await prisma.award.create({
-      data: {
-        teamId: team.id,
-        userId: admin.id,
-        name: 'Team Bonus',
-        category: 'bonus',
-        value: 75,
-      },
+    await grantAward({
+      teamId: team.id,
+      userId: admin.id,
+      name: 'Team Bonus',
+      category: 'bonus',
+      value: 75,
     })
   })
 
@@ -103,8 +106,9 @@ describe('API /api/scoreboard', () => {
 
   it('computes user score as sum of challenge points (or dynamic value) plus awards', async () => {
     // Add a dynamic challenge solve and confirm score increases accordingly
-    await prisma.solve.create({
-      data: { userId: user.id, challengeId: dynChallenge.id },
+    await supabase.from('solves').insert({
+      user_id: user.id,
+      challenge_id: dynChallenge.id,
     })
 
     const req = jsonRequest('GET', '/api/scoreboard')

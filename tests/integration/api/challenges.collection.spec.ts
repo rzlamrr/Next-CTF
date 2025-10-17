@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll } from '@jest/globals'
 import { GET as listChallenges } from '@/app/api/challenges/route'
-import { prisma } from '@/lib/db'
+import { supabase } from '@/lib/db'
 import { resetDb, seedBasic, makeUrl } from './utils'
 
 describe('API /api/challenges (collection)', () => {
@@ -65,14 +65,22 @@ describe('API /api/challenges (collection)', () => {
 
   it('updates solveCount after a solve is recorded', async () => {
     // Record a solve for first challenge
-    const first = await prisma.challenge.findFirst({ select: { id: true } })
+    const { data: first } = await supabase
+      .from('challenges')
+      .select('id')
+      .limit(1)
+      .single()
     expect(first).toBeTruthy()
     const cId = first!.id
 
-    const user = await prisma.user.findFirst({ select: { id: true } })
+    const { data: user } = await supabase
+      .from('users')
+      .select('id')
+      .limit(1)
+      .single()
     expect(user).toBeTruthy()
 
-    await prisma.solve.create({ data: { userId: user!.id, challengeId: cId } })
+    await supabase.from('solves').insert({ user_id: user!.id, challenge_id: cId })
 
     const req = new Request(makeUrl('/api/challenges'))
     const res = await listChallenges(req)

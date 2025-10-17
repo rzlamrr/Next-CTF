@@ -2,7 +2,7 @@ import { ok, toErrorResponse, parseJson } from '@/lib/utils/http'
 import { requireAdmin } from '@/lib/auth/guards'
 import { NotificationCreateSchema } from '@/lib/validations/notification'
 import { createNotification } from '@/lib/db/queries'
-import { prisma } from '@/lib/db'
+import { supabase } from '@/lib/db'
 import { sendMail } from '@/lib/email/mailer'
 
 // POST /api/admin/notifications
@@ -25,22 +25,28 @@ export async function POST(req: Request) {
       // Resolve recipients by target
       let recipients: string[] = []
       if (payload.target === 'ALL') {
-        const users = await prisma.user.findMany({ select: { email: true } })
-        recipients = users
+        const { data: users } = await supabase
+          .from('users')
+          .select('email')
+
+        recipients = (users || [])
           .map((u: { email: string | null }) => u.email)
           .filter((e: string | null): e is string => Boolean(e))
       } else if (payload.target === 'USER' && payload.userId) {
-        const user = await prisma.user.findUnique({
-          where: { id: payload.userId },
-          select: { email: true },
-        })
+        const { data: user } = await supabase
+          .from('users')
+          .select('email')
+          .eq('id', payload.userId)
+          .single()
+
         if (user?.email) recipients = [user.email]
       } else if (payload.target === 'TEAM' && payload.teamId) {
-        const members = await prisma.user.findMany({
-          where: { teamId: payload.teamId },
-          select: { email: true },
-        })
-        recipients = members
+        const { data: members } = await supabase
+          .from('users')
+          .select('email')
+          .eq('team_id', payload.teamId)
+
+        recipients = (members || [])
           .map((u: { email: string | null }) => u.email)
           .filter((e: string | null): e is string => Boolean(e))
       }

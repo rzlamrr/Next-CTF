@@ -11,8 +11,7 @@
  */
 
 import { ok, err, toErrorResponse } from '@/lib/utils/http'
-import { prisma } from '@/lib/db'
-import { computeChallengeValue } from '@/lib/db/queries'
+import { getChallengeById, computeChallengeValue } from '@/lib/db/queries'
 
 // GET /api/challenges/:id/value
 export async function GET(
@@ -25,10 +24,7 @@ export async function GET(
       return err('VALIDATION_ERROR', 'Challenge ID is required', 422)
     }
 
-    const challenge = await prisma.challenge.findUnique({
-      where: { id },
-      select: { id: true, value: true, points: true },
-    })
+    const challenge = await getChallengeById(id)
 
     if (!challenge) {
       return err('NOT_FOUND', 'Challenge not found', 404)

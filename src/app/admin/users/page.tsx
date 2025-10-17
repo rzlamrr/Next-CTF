@@ -32,8 +32,8 @@ export default async function AdminUsersPage() {
     username: u.name ?? '',
     email: u.email ?? null,
     role: u.role as Role,
-    team: u.teamId ? (teamNameById.get(u.teamId) ?? null) : null,
-    createdAt: new Date(u.createdAt).toLocaleString(),
+    team: u.team_id ? (teamNameById.get(u.team_id) ?? null) : null,
+    createdAt: new Date(u.created_at).toLocaleString(),
   }))
 
   const columns: Column<UserRow>[] = [

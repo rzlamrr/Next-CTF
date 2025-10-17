@@ -50,11 +50,16 @@ function fetchUsers(
     .then((json: Envelope<UserRow[]>) => {
       console.log('Users API response:', json)
       if (json.success) {
-        // For now, we'll estimate the total since we don't have a count endpoint
-        // In a real implementation, you would add a count endpoint or include total in the response
+        // Fetch one extra record (take = pageSize + 1) to detect if a next page exists
+        const items = json.data as UserRow[]
+        const pageSize = Math.max(1, take - 1)
+        const visible = items.slice(0, pageSize)
+        const hasMore = items.length > pageSize
         return {
-          users: json.data,
-          total: json.data.length + skip + 50 // Estimate with 50 more users
+          users: visible,
+          // Minimal, accurate total to control pagination visibility
+          // If we detected more, reflect at least one more item beyond the current page
+          total: skip + visible.length + (hasMore ? 1 : 0),
         }
       } else {
         console.error('Users API returned error:', json.error)
@@ -80,7 +85,7 @@ export default function Page() {
   
   useEffect(() => {
     setLoading(true)
-    fetchUsers(usersPerPage, skip, searchQuery, filterType)
+    fetchUsers(usersPerPage + 1, skip, searchQuery, filterType)
       .then(result => {
         setData(result)
       })
@@ -128,7 +133,7 @@ export default function Page() {
                 <input
                   type="text"
                   placeholder="Search users..."
-                  className="flex-1 px-3 py-2 text-sm rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-900 dark:text-white"
+                  className="flex-1 px-3 py-2 text-sm rounded-md border border-input bg-background text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ring-offset-background"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                 />
@@ -141,7 +146,7 @@ export default function Page() {
               </form>
               
               <select
-                className="px-3 py-2 text-sm rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-900 dark:text-white"
+                className="px-3 py-2 text-sm rounded-md border border-input bg-background text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ring-offset-background"
                 value={filterType}
                 onChange={(e) => setFilterType(e.target.value)}
               >

@@ -1,4 +1,4 @@
-import { prisma } from '@/lib/db'
+import { supabase } from '@/lib/db'
 import { StatCard } from '@/components/admin/StatCard'
 
 type RecentSolve = {
@@ -10,29 +10,42 @@ type RecentSolve = {
 }
 
 export default async function AdminHomePage() {
-  // Server component: fetch stats directly with Prisma
-  const [usersCount, teamsCount, challengesCount, submissionsCount, recentSolvesRaw] =
-    await Promise.all([
-    prisma.user.count(),
-    prisma.team.count(),
-    prisma.challenge.count(),
-    prisma.submission.count(),
-    prisma.solve.findMany({
-      include: {
-        challenge: { select: { id: true, name: true, category: true } },
-        user: { select: { id: true, name: true, email: true } },
-        team: { select: { id: true, name: true } },
-      },
-      orderBy: { createdAt: 'desc' },
-      take: 5,
-    }),
+  // Server component: fetch stats directly with Supabase
+  const [
+    usersCountRes,
+    teamsCountRes,
+    challengesCountRes,
+    submissionsCountRes,
+    recentSolvesRes,
+  ] = await Promise.all([
+    supabase.from('users').select('*', { count: 'exact', head: true }),
+    supabase.from('teams').select('*', { count: 'exact', head: true }),
+    supabase.from('challenges').select('*', { count: 'exact', head: true }),
+    supabase.from('submissions').select('*', { count: 'exact', head: true }),
+    supabase
+      .from('solves')
+      .select(`
+        id,
+        created_at,
+        challenge:challenges(id, name, category),
+        user:users(id, name, email),
+        team:teams(id, name)
+      `)
+      .order('created_at', { ascending: false })
+      .limit(5),
   ])
 
-  const recentSolves: RecentSolve[] = recentSolvesRaw.map(s => ({
+  const usersCount = usersCountRes.count ?? 0
+  const teamsCount = teamsCountRes.count ?? 0
+  const challengesCount = challengesCountRes.count ?? 0
+  const submissionsCount = submissionsCountRes.count ?? 0
+  const recentSolvesRaw = recentSolvesRes.data ?? []
+
+  const recentSolves: RecentSolve[] = recentSolvesRaw.map((s: any) => ({
     id: s.id,
-    createdAt: s.createdAt.toISOString(),
+    createdAt: new Date(s.created_at).toISOString(),
     challenge: {
-      id: s.challengeId!,
+      id: s.challenge?.id ?? '',
       name: s.challenge?.name ?? 'Unknown',
       category: s.challenge?.category ?? '-',
     },

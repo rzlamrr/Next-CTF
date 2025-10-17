@@ -1,4 +1,5 @@
-import { prisma } from '@/lib/db'
+import { supabase } from '@/lib/db'
+import { createUser, createChallenge } from '@/lib/db/queries'
 
 export function makeUrl(
   path: string,
@@ -40,20 +41,27 @@ export async function readJson<T = any>(res: Response): Promise<T> {
  * Order matters due to FK constraints.
  */
 export async function resetDb(): Promise<void> {
-  await prisma.solve.deleteMany()
-  await prisma.submission.deleteMany()
-  await prisma.notification.deleteMany()
-  await prisma.account.deleteMany()
-  await prisma.session.deleteMany()
-  await prisma.comment.deleteMany()
-  await prisma.fieldEntry.deleteMany()
-  await prisma.field.deleteMany()
-  await prisma.solution.deleteMany()
-  await prisma.rating.deleteMany()
-  await prisma.file.deleteMany()
-  await prisma.challenge.deleteMany()
-  await prisma.team.deleteMany()
-  await prisma.user.deleteMany()
+  // Delete in order respecting FK constraints
+  await supabase.from('solves').delete().neq('id', '00000000-0000-0000-0000-000000000000')
+  await supabase.from('submissions').delete().neq('id', '00000000-0000-0000-0000-000000000000')
+  await supabase.from('notifications').delete().neq('id', '00000000-0000-0000-0000-000000000000')
+  await supabase.from('accounts').delete().neq('id', '00000000-0000-0000-0000-000000000000')
+  await supabase.from('sessions').delete().neq('id', '00000000-0000-0000-0000-000000000000')
+  await supabase.from('comments').delete().neq('id', '00000000-0000-0000-0000-000000000000')
+  await supabase.from('field_entries').delete().neq('id', '00000000-0000-0000-0000-000000000000')
+  await supabase.from('fields').delete().neq('id', '00000000-0000-0000-0000-000000000000')
+  await supabase.from('solutions').delete().neq('id', '00000000-0000-0000-0000-000000000000')
+  await supabase.from('ratings').delete().neq('id', '00000000-0000-0000-0000-000000000000')
+  await supabase.from('hints').delete().neq('id', '00000000-0000-0000-0000-000000000000')
+  await supabase.from('files').delete().neq('id', '00000000-0000-0000-0000-000000000000')
+  await supabase.from('challenge_topics').delete().neq('challenge_id', '00000000-0000-0000-0000-000000000000')
+  await supabase.from('challenge_tags').delete().neq('challenge_id', '00000000-0000-0000-0000-000000000000')
+  await supabase.from('topics').delete().neq('id', '00000000-0000-0000-0000-000000000000')
+  await supabase.from('tags').delete().neq('id', '00000000-0000-0000-0000-000000000000')
+  await supabase.from('challenges').delete().neq('id', '00000000-0000-0000-0000-000000000000')
+  await supabase.from('awards').delete().neq('id', '00000000-0000-0000-0000-000000000000')
+  await supabase.from('teams').delete().neq('id', '00000000-0000-0000-0000-000000000000')
+  await supabase.from('users').delete().neq('id', '00000000-0000-0000-0000-000000000000')
 }
 
 /**
@@ -65,54 +73,47 @@ export async function seedBasic(): Promise<{
   stdChallenge: { id: string; flag: string; points: number }
   dynChallenge: { id: string; flag: string; points: number }
 }> {
-  const admin = await prisma.user.create({
-    data: {
-      name: 'rizal',
-      email: 'rizal@example.com',
-      password: 'hashed',
-      role: 'ADMIN',
-    },
-    select: { id: true, email: true },
+  const admin = await createUser({
+    name: 'rizal',
+    email: 'rizal@example.com',
+    password: 'hashed',
+    role: 'ADMIN',
   })
 
-  const user = await prisma.user.create({
-    data: {
-      name: 'icank',
-      email: 'icank@example.com',
-      password: 'hashed',
-      role: 'USER',
-    },
-    select: { id: true, email: true },
+  const user = await createUser({
+    name: 'icank',
+    email: 'icank@example.com',
+    password: 'hashed',
+    role: 'USER',
   })
 
-  const std = await prisma.challenge.create({
-    data: {
-      name: 'Std Challenge',
-      description: 'Simple standard',
-      category: 'Web',
-      difficulty: 'EASY',
-      points: 100,
-      flag: 'flag{std}',
-      type: 'STANDARD',
-    },
-    select: { id: true, flag: true, points: true },
+  const std = await createChallenge({
+    name: 'Std Challenge',
+    description: 'Simple standard',
+    category: 'Web',
+    difficulty: 'EASY',
+    points: 100,
+    flag: 'flag{std}',
+    type: 'STANDARD',
   })
 
-  const dyn = await prisma.challenge.create({
-    data: {
-      name: 'Dyn Challenge',
-      description: 'Dynamic scoring',
-      category: 'Reverse',
-      difficulty: 'MEDIUM',
-      points: 300,
-      flag: 'flag{dyn}',
-      type: 'DYNAMIC',
-      value: 300,
-      decay: 10,
-      minimum: 50,
-    },
-    select: { id: true, flag: true, points: true },
+  const dyn = await createChallenge({
+    name: 'Dyn Challenge',
+    description: 'Dynamic scoring',
+    category: 'Reverse',
+    difficulty: 'MEDIUM',
+    points: 300,
+    flag: 'flag{dyn}',
+    type: 'DYNAMIC',
+    value: 300,
+    decay: 10,
+    minimum: 50,
   })
 
-  return { admin, user, stdChallenge: std, dynChallenge: dyn }
+  return {
+    admin: { id: admin.id, email: admin.email },
+    user: { id: user.id, email: user.email },
+    stdChallenge: { id: std.id, flag: std.flag, points: std.points },
+    dynChallenge: { id: dyn.id, flag: dyn.flag, points: dyn.points },
+  }
 }

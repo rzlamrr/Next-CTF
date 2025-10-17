@@ -1,5 +1,7 @@
-import { PrismaClient, Prisma } from '@prisma/client'
-import { prisma } from './index'
+import { supabase } from './index'
+import type { Database } from './types'
+
+type Tables = Database['public']['Tables']
 
 /**
  * Users
@@ -12,37 +14,52 @@ export async function createUser(data: {
   role?: 'USER' | 'ADMIN'
   teamId?: string | null
 }) {
-  return prisma.user.create({
-    data: {
+  const { data: user, error } = await supabase
+    .from('users')
+    .insert({
       name: data.name,
       email: data.email,
       password: data.password,
       role: data.role ?? 'USER',
-      teamId: data.teamId ?? null,
-    },
-  })
+      team_id: data.teamId ?? null,
+    })
+    .select()
+    .single()
+
+  if (error) throw error
+  return user
 }
 
 export async function getUserByEmail(email: string) {
-  return prisma.user.findUnique({
-    where: { email },
-    include: {
-      team: true,
-      submissions: true,
-      solves: true,
-      awards: true,
-      notifications: true,
-    },
-  })
+  const { data: user, error } = await supabase
+    .from('users')
+    .select(`
+      *,
+      team:teams(*),
+      submissions(*),
+      solves(*),
+      awards(*),
+      notifications(*)
+    `)
+    .eq('email', email)
+    .single()
+
+  if (error && error.code !== 'PGRST116') throw error
+  return user
 }
 
 export async function getUserById(id: string) {
-  return prisma.user.findUnique({
-    where: { id },
-    include: {
-      team: true,
-    },
-  })
+  const { data: user, error } = await supabase
+    .from('users')
+    .select(`
+      *,
+      team:teams(*)
+    `)
+    .eq('id', id)
+    .single()
+
+  if (error && error.code !== 'PGRST116') throw error
+  return user
 }
 
 export async function listUsers(params?: {
@@ -59,27 +76,31 @@ export async function listUsers(params?: {
     skip = 0,
     orderBy = { createdAt: 'desc' },
   } = params ?? {}
-  return prisma.user.findMany({
-    where: {
-      AND: [
-        q
-          ? {
-              OR: [
-                { name: { contains: q } },
-                { email: { contains: q } },
-                { website: { contains: q } },
-                { affiliation: { contains: q } },
-                { country: { contains: q } },
-              ],
-            }
-          : {},
-        teamId !== undefined ? { teamId: teamId ?? null } : {},
-      ],
-    },
-    take,
-    skip,
-    orderBy,
-  })
+
+  let query = supabase.from('users').select('*')
+
+  if (q) {
+    query = query.or(`name.ilike.%${q}%,email.ilike.%${q}%,website.ilike.%${q}%,affiliation.ilike.%${q}%,country.ilike.%${q}%`)
+  }
+
+  if (teamId !== undefined) {
+    if (teamId === null) {
+      query = query.is('team_id', null)
+    } else {
+      query = query.eq('team_id', teamId)
+    }
+  }
+
+  query = query.range(skip, skip + take - 1)
+
+  if (orderBy.createdAt) {
+    query = query.order('created_at', { ascending: orderBy.createdAt === 'asc' })
+  }
+
+  const { data, error } = await query
+
+  if (error) throw error
+  return data ?? []
 }
 
 export async function updateUser(
@@ -94,21 +115,40 @@ export async function updateUser(
     country: string | null
   }>
 ) {
-  return prisma.user.update({
-    where: { id },
-    data,
-  })
+  const updateData: any = {}
+  if (data.name !== undefined) updateData.name = data.name
+  if (data.password !== undefined) updateData.password = data.password
+  if (data.role !== undefined) updateData.role = data.role
+  if (data.teamId !== undefined) updateData.team_id = data.teamId
+  if (data.website !== undefined) updateData.website = data.website
+  if (data.affiliation !== undefined) updateData.affiliation = data.affiliation
+  if (data.country !== undefined) updateData.country = data.country
+
+  const { data: user, error } = await supabase
+    .from('users')
+    .update(updateData)
+    .eq('id', id)
+    .select()
+    .single()
+
+  if (error) throw error
+  return user
 }
 
 export async function deleteUser(id: string) {
-  return prisma.user.delete({ where: { id } })
+  const { data, error } = await supabase
+    .from('users')
+    .delete()
+    .eq('id', id)
+    .select()
+    .single()
+
+  if (error) throw error
+  return data
 }
 
 export async function attachUserToTeam(userId: string, teamId: string | null) {
-  return prisma.user.update({
-    where: { id: userId },
-    data: { teamId },
-  })
+  return updateUser(userId, { teamId })
 }
 
 /**
@@ -121,40 +161,44 @@ export async function createTeam(data: {
   captainId: string
   password?: string | null
 }) {
-  return prisma.team.create({
-    data: {
+  const { data: team, error } = await supabase
+    .from('teams')
+    .insert({
       name: data.name,
       description: data.description ?? null,
-      captainId: data.captainId,
+      captain_id: data.captainId,
       password: data.password ?? null,
-    },
-  })
+    })
+    .select()
+    .single()
+
+  if (error) throw error
+  return team
 }
 
 export async function addMemberToTeam(teamId: string, userId: string) {
-  return prisma.user.update({
-    where: { id: userId },
-    data: { teamId },
-  })
+  return updateUser(userId, { teamId })
 }
 
 export async function removeMemberFromTeam(userId: string) {
-  return prisma.user.update({
-    where: { id: userId },
-    data: { teamId: null },
-  })
+  return updateUser(userId, { teamId: null })
 }
 
 export async function getTeamById(id: string) {
-  return prisma.team.findUnique({
-    where: { id },
-    include: {
-      members: true,
-      awards: true,
-      submissions: true,
-      solves: true,
-    },
-  })
+  const { data: team, error } = await supabase
+    .from('teams')
+    .select(`
+      *,
+      members:users(*),
+      awards(*),
+      submissions(*),
+      solves(*)
+    `)
+    .eq('id', id)
+    .single()
+
+  if (error && error.code !== 'PGRST116') throw error
+  return team
 }
 
 export async function listTeams(params?: {
@@ -163,12 +207,21 @@ export async function listTeams(params?: {
   skip?: number
 }) {
   const { q, take = 50, skip = 0 } = params ?? {}
-  return prisma.team.findMany({
-    where: q ? { name: { contains: q } } : undefined,
-    take,
-    skip,
-    orderBy: { createdAt: 'desc' },
-  })
+
+  let query = supabase
+    .from('teams')
+    .select('*')
+    .order('created_at', { ascending: false })
+    .range(skip, skip + take - 1)
+
+  if (q) {
+    query = query.ilike('name', `%${q}%`)
+  }
+
+  const { data, error } = await query
+
+  if (error) throw error
+  return data ?? []
 }
 
 /**
@@ -193,42 +246,62 @@ export async function listChallenges(params?: {
     take = 100,
     skip = 0,
   } = params ?? {}
-  return prisma.challenge.findMany({
-    where: {
-      AND: [
-        q
-          ? {
-              OR: [{ name: { contains: q } }, { description: { contains: q } }],
-            }
-          : {},
-        category ? { category } : {},
-        difficulty ? { difficulty } : {},
-        bracketId !== undefined ? { bracketId: bracketId ?? null } : {},
-        type ? { type } : {},
-      ],
-    },
-    include: {
-      hints: true,
-      files: true,
-      tags: true,
-      topics: true,
-    },
-    take,
-    skip,
-    orderBy: { createdAt: 'desc' },
-  })
+
+  let query = supabase.from('challenges').select(`
+    *,
+    hints(*),
+    files(*)
+  `)
+
+  if (q) {
+    query = query.or(`name.ilike.%${q}%,description.ilike.%${q}%`)
+  }
+
+  if (category) {
+    query = query.eq('category', category)
+  }
+
+  if (difficulty) {
+    query = query.eq('difficulty', difficulty)
+  }
+
+  if (bracketId !== undefined) {
+    if (bracketId === null) {
+      query = query.is('bracket_id', null)
+    } else {
+      query = query.eq('bracket_id', bracketId)
+    }
+  }
+
+  if (type) {
+    query = query.eq('type', type)
+  }
+
+  query = query.order('created_at', { ascending: false }).range(skip, skip + take - 1)
+
+  const { data, error } = await query
+
+  if (error) throw error
+
+  return data ?? []
 }
 
 export async function getChallengeById(id: string) {
-  return prisma.challenge.findUnique({
-    where: { id },
-    include: {
-      hints: true,
-      files: true,
-      tags: true,
-      topics: true,
-    },
-  })
+  const { data: challenge, error } = await supabase
+    .from('challenges')
+    .select(`
+      *,
+      hints(*),
+      files(*)
+    `)
+    .eq('id', id)
+    .single()
+
+  if (error && error.code !== 'PGRST116') throw error
+
+  if (!challenge) return null
+
+  return challenge
 }
 
 export async function createChallenge(data: {
@@ -247,47 +320,82 @@ export async function createChallenge(data: {
   bracketId?: string | null
   connectionInfo?: string | null
   requirements?: string | null
-  tagNames?: string[]
-  topicNames?: string[]
 }) {
-  const { tagNames = [], topicNames = [], ...rest } = data
-  return prisma.challenge.create({
-    data: {
-      ...rest,
+  const rest = data
+
+  const { data: challenge, error } = await supabase
+    .from('challenges')
+    .insert({
+      name: rest.name,
+      description: rest.description,
+      category: rest.category,
+      difficulty: rest.difficulty,
+      points: rest.points,
+      flag: rest.flag,
+      max_attempts: rest.maxAttempts ?? null,
       type: rest.type ?? 'STANDARD',
       function: rest.function ?? 'static',
-      tags: tagNames.length
-        ? {
-            connectOrCreate: tagNames.map(name => ({
-              where: { name },
-              create: { name },
-            })),
-          }
-        : undefined,
-      topics: topicNames.length
-        ? {
-            connectOrCreate: topicNames.map(name => ({
-              where: { name },
-              create: { name, category: 'General' },
-            })),
-          }
-        : undefined,
-    },
-  })
+      value: rest.value ?? null,
+      decay: rest.decay ?? null,
+      minimum: rest.minimum ?? null,
+      bracket_id: rest.bracketId ?? null,
+      connection_info: rest.connectionInfo ?? null,
+      requirements: rest.requirements ?? null,
+    })
+    .select()
+    .single()
+
+  if (error) throw error
+
+
+
+  return challenge
 }
 
 export async function updateChallenge(
   id: string,
   data: Partial<Record<string, unknown>>
 ) {
-  return prisma.challenge.update({
-    where: { id },
-    data,
-  })
+  const updateData: any = {}
+
+  // Map camelCase to snake_case
+  if (data.name !== undefined) updateData.name = data.name
+  if (data.description !== undefined) updateData.description = data.description
+  if (data.category !== undefined) updateData.category = data.category
+  if (data.difficulty !== undefined) updateData.difficulty = data.difficulty
+  if (data.points !== undefined) updateData.points = data.points
+  if (data.flag !== undefined) updateData.flag = data.flag
+  if (data.maxAttempts !== undefined) updateData.max_attempts = data.maxAttempts
+  if (data.type !== undefined) updateData.type = data.type
+  if (data.function !== undefined) updateData.function = data.function
+  if (data.value !== undefined) updateData.value = data.value
+  if (data.decay !== undefined) updateData.decay = data.decay
+  if (data.minimum !== undefined) updateData.minimum = data.minimum
+  if (data.bracketId !== undefined) updateData.bracket_id = data.bracketId
+  if (data.connectionInfo !== undefined) updateData.connection_info = data.connectionInfo
+  if (data.requirements !== undefined) updateData.requirements = data.requirements
+
+  const { data: challenge, error } = await supabase
+    .from('challenges')
+    .update(updateData)
+    .eq('id', id)
+    .select()
+    .single()
+
+  if (error) throw error
+  return challenge
 }
 
 export async function deleteChallenge(id: string) {
-  return prisma.challenge.delete({ where: { id } })
+  const { data, error } = await supabase
+    .from('challenges')
+    .delete()
+    .eq('id', id)
+    .select()
+    .single()
+
+  if (error) throw error
+  return data
 }
 
 export async function addHintToChallenge(
@@ -296,58 +404,30 @@ export async function addHintToChallenge(
   content: string,
   cost: number
 ) {
-  return prisma.hint.create({
-    data: { challengeId, title, content, cost },
-  })
+  const { data, error } = await supabase
+    .from('hints')
+    .insert({ challenge_id: challengeId, title, content, cost })
+    .select()
+    .single()
+
+  if (error) throw error
+  return data
 }
 
 export async function addFileToChallenge(
   challengeId: string,
   location: string
 ) {
-  return prisma.file.create({
-    data: { challengeId, location },
-  })
+  const { data, error } = await supabase
+    .from('files')
+    .insert({ challenge_id: challengeId, location })
+    .select()
+    .single()
+
+  if (error) throw error
+  return data
 }
 
-export async function attachTagsToChallenge(
-  challengeId: string,
-  tagNames: string[]
-) {
-  if (!tagNames.length) return getChallengeById(challengeId)
-  return prisma.challenge.update({
-    where: { id: challengeId },
-    data: {
-      tags: {
-        connectOrCreate: tagNames.map(name => ({
-          where: { name },
-          create: { name },
-        })),
-      },
-    },
-    include: { tags: true },
-  })
-}
-
-export async function attachTopicsToChallenge(
-  challengeId: string,
-  topicNames: string[],
-  defaultCategory = 'General'
-) {
-  if (!topicNames.length) return getChallengeById(challengeId)
-  return prisma.challenge.update({
-    where: { id: challengeId },
-    data: {
-      topics: {
-        connectOrCreate: topicNames.map(name => ({
-          where: { name },
-          create: { name, category: defaultCategory },
-        })),
-      },
-    },
-    include: { topics: true },
-  })
-}
 
 /**
  * Submissions & Solves
@@ -360,50 +440,57 @@ export async function submitFlag(params: {
   flag: string
 }) {
   // Fetch challenge to check flag
-  const challenge = await prisma.challenge.findUnique({
-    where: { id: params.challengeId },
-  })
-  if (!challenge) throw new Error('Challenge not found')
+  const { data: challenge, error: challengeError } = await supabase
+    .from('challenges')
+    .select('id, flag, type')
+    .eq('id', params.challengeId)
+    .single()
+
+  if (challengeError || !challenge) throw new Error('Challenge not found')
+
   const correct = challenge.flag === params.flag
 
   // Check if submission already exists for this user+challenge combination
-  const existingSubmission = await prisma.submission.findFirst({
-    where: {
-      userId: params.userId!,
-      challengeId: params.challengeId,
-    },
-  })
+  const { data: existingSubmission } = await supabase
+    .from('submissions')
+    .select('*')
+    .eq('user_id', params.userId!)
+    .eq('challenge_id', params.challengeId)
+    .single()
 
   let submission
   if (existingSubmission) {
-    // Return existing submission instead of trying to create a new one
     submission = existingSubmission
   } else {
     // Create new submission
-    submission = await prisma.submission.create({
-      data: {
-        userId: params.userId!,
-        teamId: params.teamId ?? null,
-        challengeId: params.challengeId,
+    const { data: newSubmission, error: submissionError } = await supabase
+      .from('submissions')
+      .insert({
+        user_id: params.userId!,
+        team_id: params.teamId ?? null,
+        challenge_id: params.challengeId,
         flag: params.flag,
         status: correct ? 'CORRECT' : 'INCORRECT',
-      },
-    })
+      })
+      .select()
+      .single()
+
+    if (submissionError) throw submissionError
+    submission = newSubmission
   }
 
-  // Record solve if correct and not exists
+  // Record solve if correct
   if (correct) {
     try {
-      await prisma.solve.create({
-        data: {
-          userId: params.userId!,
-          teamId: params.teamId ?? null,
-          challengeId: params.challengeId,
-        },
-      })
+      await supabase
+        .from('solves')
+        .insert({
+          user_id: params.userId!,
+          team_id: params.teamId ?? null,
+          challenge_id: params.challengeId,
+        })
     } catch (e: any) {
-      // Unique constraint on solve; ignore duplicate solves
-      if (e?.code !== 'P2002') throw e
+      // Ignore unique constraint violations
     }
 
     // Dynamic scoring: update persisted challenge value after a correct solve
@@ -411,8 +498,7 @@ export async function submitFlag(params: {
       try {
         await updateChallengeValue(params.challengeId)
       } catch (e) {
-        // Non-fatal: scoring update should not block submission flow
-        // Optionally log or surface error in future
+        // Non-fatal
       }
     }
   }
@@ -421,42 +507,53 @@ export async function submitFlag(params: {
 }
 
 export async function getUserSolves(userId: string) {
-  return prisma.solve.findMany({
-    where: { userId },
-    include: { challenge: true },
-    orderBy: { createdAt: 'desc' },
-  })
+  const { data, error } = await supabase
+    .from('solves')
+    .select('*, challenge:challenges(*)')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false })
+
+  if (error) throw error
+  return data ?? []
 }
 
 export async function getTeamSolves(teamId: string) {
-  return prisma.solve.findMany({
-    where: { teamId },
-    include: { challenge: true },
-    orderBy: { createdAt: 'desc' },
-  })
+  const { data, error } = await supabase
+    .from('solves')
+    .select('*, challenge:challenges(*)')
+    .eq('team_id', teamId)
+    .order('created_at', { ascending: false })
+
+  if (error) throw error
+  return data ?? []
 }
 
 export async function getUserSubmissions(userId: string) {
-  return prisma.submission.findMany({
-    where: { userId },
-    include: { challenge: true },
-    orderBy: { createdAt: 'desc' },
-  })
+  const { data, error } = await supabase
+    .from('submissions')
+    .select('*, challenge:challenges(*)')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false })
+
+  if (error) throw error
+  return data ?? []
 }
 
 export async function getTeamSubmissions(teamId: string) {
-  return prisma.submission.findMany({
-    where: { teamId },
-    include: { challenge: true },
-    orderBy: { createdAt: 'desc' },
-  })
+  const { data, error } = await supabase
+    .from('submissions')
+    .select('*, challenge:challenges(*)')
+    .eq('team_id', teamId)
+    .order('created_at', { ascending: false })
+
+  if (error) throw error
+  return data ?? []
 }
 
 /**
  * Notifications
  */
 
-// List notifications for a user ordered by newest first
 export async function listUserNotifications(
   userId: string
 ): Promise<
@@ -468,20 +565,23 @@ export async function listUserNotifications(
     createdAt: Date
   }>
 > {
-  return prisma.notification.findMany({
-    where: { userId },
-    select: {
-      id: true,
-      title: true,
-      content: true,
-      read: true,
-      createdAt: true,
-    },
-    orderBy: { createdAt: 'desc' },
-  })
+  const { data, error } = await supabase
+    .from('notifications')
+    .select('id, title, content, read, created_at')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false })
+
+  if (error) throw error
+
+  return (data ?? []).map((n: any) => ({
+    id: n.id,
+    title: n.title,
+    content: n.content,
+    read: n.read,
+    createdAt: new Date(n.created_at),
+  }))
 }
 
-// Overloads: keep legacy single-create and add broadcast payload variant
 export async function createNotification(
   userId: string,
   title: string,
@@ -525,9 +625,23 @@ export async function createNotification(
     const userId = arg1 as string
     const title = arg2 as string
     const content = arg3 as string
-    return prisma.notification.create({
-      data: { userId, title, content },
-    })
+
+    const { data, error } = await supabase
+      .from('notifications')
+      .insert({ user_id: userId, title, content })
+      .select()
+      .single()
+
+    if (error) throw error
+
+    return {
+      id: data.id,
+      userId: data.user_id,
+      title: data.title,
+      content: data.content,
+      read: data.read,
+      createdAt: new Date(data.created_at),
+    }
   }
 
   // Broadcast/create by payload
@@ -541,68 +655,86 @@ export async function createNotification(
 
   switch (payload.target) {
     case 'ALL': {
-      const users = await prisma.user.findMany({ select: { id: true } })
-      if (!users.length) return { createdCount: 0 }
-      const data = users.map((u: { id: string }) => ({
-        userId: u.id,
+      const { data: users } = await supabase.from('users').select('id')
+      if (!users || users.length === 0) return { createdCount: 0 }
+
+      const notifications = users.map((u: any) => ({
+        user_id: u.id,
         title: payload.title,
         content: payload.body,
       }))
-      const result = await prisma.notification.createMany({ data })
-      return { createdCount: result.count }
+
+      const { error } = await supabase.from('notifications').insert(notifications)
+      if (error) throw error
+
+      return { createdCount: users.length }
     }
     case 'USER': {
       if (!payload.userId) return { createdCount: 0 }
-      const res = await prisma.notification.createMany({
-        data: [
-          {
-            userId: payload.userId,
-            title: payload.title,
-            content: payload.body,
-          },
-        ],
-      })
-      return { createdCount: res.count }
+
+      const { error } = await supabase
+        .from('notifications')
+        .insert({
+          user_id: payload.userId,
+          title: payload.title,
+          content: payload.body,
+        })
+
+      if (error) throw error
+      return { createdCount: 1 }
     }
     case 'TEAM': {
       if (!payload.teamId) return { createdCount: 0 }
-      const members = await prisma.user.findMany({
-        where: { teamId: payload.teamId },
-        select: { id: true },
-      })
-      if (!members.length) return { createdCount: 0 }
-      const data = members.map((m: { id: string }) => ({
-        userId: m.id,
+
+      const { data: members } = await supabase
+        .from('users')
+        .select('id')
+        .eq('team_id', payload.teamId)
+
+      if (!members || members.length === 0) return { createdCount: 0 }
+
+      const notifications = members.map((m: any) => ({
+        user_id: m.id,
         title: payload.title,
         content: payload.body,
       }))
-      const res = await prisma.notification.createMany({ data })
-      return { createdCount: res.count }
+
+      const { error } = await supabase.from('notifications').insert(notifications)
+      if (error) throw error
+
+      return { createdCount: members.length }
     }
     default:
       return { createdCount: 0 }
   }
 }
 
-// Mark multiple notifications as read for an owner
 export async function markNotificationsRead(
   userId: string,
   ids: string[]
 ): Promise<number> {
   if (!ids.length) return 0
-  const res = await prisma.notification.updateMany({
-    where: { userId, id: { in: ids } },
-    data: { read: true },
-  })
-  return res.count
+
+  const { error, count } = await supabase
+    .from('notifications')
+    .update({ read: true })
+    .eq('user_id', userId)
+    .in('id', ids)
+
+  if (error) throw error
+  return count ?? 0
 }
 
-// Retain existing single-update helper (used elsewhere)
 export async function markNotificationRead(id: string) {
-  return prisma.notification.update({
-    where: { id },
-    data: { read: true },
-  })
+  const { data, error } = await supabase
+    .from('notifications')
+    .update({ read: true })
+    .eq('id', id)
+    .select()
+    .single()
+
+  if (error) throw error
+  return data
 }
 
 /**
@@ -618,17 +750,22 @@ export async function grantAward(params: {
   value: number
   icon?: string | null
 }) {
-  return prisma.award.create({
-    data: {
-      userId: params.userId!,
-      teamId: params.teamId ?? null,
+  const { data, error } = await supabase
+    .from('awards')
+    .insert({
+      user_id: params.userId!,
+      team_id: params.teamId ?? null,
       name: params.name,
       description: params.description ?? null,
       category: params.category ?? 'general',
       value: params.value,
       icon: params.icon ?? null,
-    },
-  })
+    })
+    .select()
+    .single()
+
+  if (error) throw error
+  return data
 }
 
 /**
@@ -636,7 +773,14 @@ export async function grantAward(params: {
  */
 
 export async function getConfig(key: string) {
-  return prisma.config.findUnique({ where: { key } })
+  const { data, error } = await supabase
+    .from('configs')
+    .select('*')
+    .eq('key', key)
+    .single()
+
+  if (error && error.code !== 'PGRST116') throw error
+  return data
 }
 
 export async function setConfig(
@@ -645,11 +789,19 @@ export async function setConfig(
   type: 'STRING' | 'NUMBER' | 'BOOLEAN' = 'STRING',
   description?: string | null
 ) {
-  return prisma.config.upsert({
-    where: { key },
-    update: { value, type, description },
-    create: { key, value, type, description: description ?? null },
-  })
+  const { data, error } = await supabase
+    .from('configs')
+    .upsert({
+      key,
+      value,
+      type,
+      description: description ?? null,
+    })
+    .select()
+    .single()
+
+  if (error) throw error
+  return data
 }
 
 /**
@@ -657,7 +809,14 @@ export async function setConfig(
  */
 
 export async function getPageByRoute(route: string) {
-  return prisma.page.findUnique({ where: { route } })
+  const { data, error } = await supabase
+    .from('pages')
+    .select('*')
+    .eq('route', route)
+    .single()
+
+  if (error && error.code !== 'PGRST116') throw error
+  return data
 }
 
 export async function listPages(params?: {
@@ -665,15 +824,21 @@ export async function listPages(params?: {
   onlyDrafts?: boolean
 }) {
   const { includeHidden = false, onlyDrafts = false } = params ?? {}
-  return prisma.page.findMany({
-    where: {
-      AND: [
-        includeHidden ? {} : { hidden: false },
-        onlyDrafts ? { draft: true } : {},
-      ],
-    },
-    orderBy: { createdAt: 'desc' },
-  })
+
+  let query = supabase.from('pages').select('*').order('created_at', { ascending: false })
+
+  if (!includeHidden) {
+    query = query.eq('hidden', false)
+  }
+
+  if (onlyDrafts) {
+    query = query.eq('draft', true)
+  }
+
+  const { data, error } = await query
+
+  if (error) throw error
+  return data ?? []
 }
 
 export async function createPage(data: {
@@ -684,16 +849,21 @@ export async function createPage(data: {
   hidden?: boolean
   authRequired?: boolean
 }) {
-  return prisma.page.create({
-    data: {
+  const { data: page, error } = await supabase
+    .from('pages')
+    .insert({
       title: data.title,
       route: data.route,
       content: data.content,
       draft: data.draft ?? false,
       hidden: data.hidden ?? false,
-      authRequired: data.authRequired ?? false,
-    },
-  })
+      auth_required: data.authRequired ?? false,
+    })
+    .select()
+    .single()
+
+  if (error) throw error
+  return page
 }
 
 /**
@@ -701,10 +871,13 @@ export async function createPage(data: {
  */
 
 export async function listFields() {
-  return prisma.field.findMany({
-    include: { fieldEntries: true },
-    orderBy: { createdAt: 'desc' },
-  })
+  const { data, error } = await supabase
+    .from('fields')
+    .select('*, fieldEntries:field_entries(*)')
+    .order('created_at', { ascending: false })
+
+  if (error) throw error
+  return data ?? []
 }
 
 export async function setFieldEntry(params: {
@@ -714,23 +887,20 @@ export async function setFieldEntry(params: {
   teamId?: string | null
   value: string
 }) {
-  return prisma.fieldEntry.upsert({
-    where: {
-      id_fieldId_userId: {
-        id: params.id,
-        fieldId: params.fieldId,
-        userId: params.userId,
-      },
-    },
-    update: { value: params.value, teamId: params.teamId ?? null },
-    create: {
+  const { data, error } = await supabase
+    .from('field_entries')
+    .upsert({
       id: params.id,
-      fieldId: params.fieldId,
-      userId: params.userId,
-      teamId: params.teamId ?? null,
+      field_id: params.fieldId,
+      user_id: params.userId,
+      team_id: params.teamId ?? null,
       value: params.value,
-    },
-  })
+    })
+    .select()
+    .single()
+
+  if (error) throw error
+  return data
 }
 
 /**
@@ -738,63 +908,46 @@ export async function setFieldEntry(params: {
  */
 
 export async function getUserScore(userId: string) {
-  const [solves, awards] = await Promise.all([
-    prisma.solve.findMany({ where: { userId }, include: { challenge: true } }),
-    prisma.award.findMany({ where: { userId } }),
-  ])
+  const { data: solves } = await supabase
+    .from('solves')
+    .select('*, challenge:challenges(type, value, points)')
+    .eq('user_id', userId)
 
-  const solveScore = solves.reduce(
-    (
-      sum: number,
-      s: {
-        challenge: {
-          type: 'STANDARD' | 'DYNAMIC'
-          value: number | null
-          points: number
-        } | null
-      }
-    ) => {
-      const c = s.challenge
-      if (!c) return sum
-      if (c.type === 'DYNAMIC' && c.value != null) return sum + c.value
-      return sum + c.points
-    },
-    0
-  )
-  const awardScore = awards.reduce(
-    (sum: number, a: { value: number }) => sum + a.value,
-    0
-  )
+  const { data: awards } = await supabase
+    .from('awards')
+    .select('value')
+    .eq('user_id', userId)
+
+  const solveScore = (solves ?? []).reduce((sum: number, s: any) => {
+    const c = s.challenge as any
+    if (!c) return sum
+    if (c.type === 'DYNAMIC' && c.value != null) return sum + c.value
+    return sum + c.points
+  }, 0)
+
+  const awardScore = (awards ?? []).reduce((sum: number, a: any) => sum + a.value, 0)
   return solveScore + awardScore
 }
 
 export async function getTeamScore(teamId: string) {
-  const [solves, awards] = await Promise.all([
-    prisma.solve.findMany({ where: { teamId }, include: { challenge: true } }),
-    prisma.award.findMany({ where: { teamId } }),
-  ])
-  const solveScore = solves.reduce(
-    (
-      sum: number,
-      s: {
-        challenge: {
-          type: 'STANDARD' | 'DYNAMIC'
-          value: number | null
-          points: number
-        } | null
-      }
-    ) => {
-      const c = s.challenge
-      if (!c) return sum
-      if (c.type === 'DYNAMIC' && c.value != null) return sum + c.value
-      return sum + c.points
-    },
-    0
-  )
-  const awardScore = awards.reduce(
-    (sum: number, a: { value: number }) => sum + a.value,
-    0
-  )
+  const { data: solves } = await supabase
+    .from('solves')
+    .select('*, challenge:challenges(type, value, points)')
+    .eq('team_id', teamId)
+
+  const { data: awards } = await supabase
+    .from('awards')
+    .select('value')
+    .eq('team_id', teamId)
+
+  const solveScore = (solves ?? []).reduce((sum: number, s: any) => {
+    const c = s.challenge as any
+    if (!c) return sum
+    if (c.type === 'DYNAMIC' && c.value != null) return sum + c.value
+    return sum + c.points
+  }, 0)
+
+  const awardScore = (awards ?? []).reduce((sum: number, a: any) => sum + a.value, 0)
   return solveScore + awardScore
 }
 
@@ -802,9 +955,12 @@ export async function getTeamScore(teamId: string) {
  * Safe transaction wrapper
  */
 
-export async function withTransaction<T>(fn: (tx: PrismaClient) => Promise<T>) {
-  return prisma.$transaction(async (tx: any) => fn(tx as PrismaClient))
+export async function withTransaction<T>(fn: (tx: any) => Promise<T>) {
+  // Supabase doesn't have built-in transactions like Prisma
+  // For now, just execute the function
+  return fn(supabase)
 }
+
 /**
  * Phase 2 helpers: Hints, Files, Ratings, Comments, Solutions, Listings
  */
@@ -820,17 +976,14 @@ export async function listHintsByChallenge(
     requirements?: string | null
   }>
 > {
-  return prisma.hint.findMany({
-    where: { challengeId },
-    select: {
-      id: true,
-      title: true,
-      cost: true,
-      type: true,
-      requirements: true,
-    },
-    orderBy: { createdAt: 'asc' },
-  })
+  const { data, error } = await supabase
+    .from('hints')
+    .select('id, title, cost, type, requirements')
+    .eq('challenge_id', challengeId)
+    .order('created_at', { ascending: true })
+
+  if (error) throw error
+  return data ?? []
 }
 
 export async function createHint(data: {
@@ -841,16 +994,21 @@ export async function createHint(data: {
   type?: string | null
   requirements?: string | null
 }) {
-  return prisma.hint.create({
-    data: {
-      challengeId: data.challengeId,
+  const { data: hint, error } = await supabase
+    .from('hints')
+    .insert({
+      challenge_id: data.challengeId,
       title: data.title,
       content: data.content,
       cost: data.cost,
       type: data.type ?? null,
       requirements: data.requirements ?? null,
-    },
-  })
+    })
+    .select()
+    .single()
+
+  if (error) throw error
+  return hint
 }
 
 export async function updateHint(
@@ -863,14 +1021,27 @@ export async function updateHint(
     requirements: string | null
   }>
 ) {
-  return prisma.hint.update({
-    where: { id },
-    data,
-  })
+  const { data: hint, error } = await supabase
+    .from('hints')
+    .update(data)
+    .eq('id', id)
+    .select()
+    .single()
+
+  if (error) throw error
+  return hint
 }
 
 export async function deleteHint(id: string) {
-  return prisma.hint.delete({ where: { id } })
+  const { data, error } = await supabase
+    .from('hints')
+    .delete()
+    .eq('id', id)
+    .select()
+    .single()
+
+  if (error) throw error
+  return data
 }
 
 export async function unlockHint(
@@ -878,29 +1049,41 @@ export async function unlockHint(
   hintId: string
 ): Promise<{ unlocked: boolean; already: boolean }> {
   // Ensure hint exists
-  const hint = await prisma.hint.findUnique({ where: { id: hintId } })
+  const { data: hint } = await supabase
+    .from('hints')
+    .select('id')
+    .eq('id', hintId)
+    .single()
+
   if (!hint) throw new Error('Hint not found')
 
   // Resolve requester team (if any)
-  const user = await prisma.user.findUnique({ where: { id: userId } })
-  const teamId = user?.teamId ?? null
+  const { data: user } = await supabase
+    .from('users')
+    .select('id, team_id')
+    .eq('id', userId)
+    .single()
+
+  const teamId = user?.team_id ?? null
 
   // Check if already unlocked for this user
-  const existing = await prisma.unlock.findFirst({
-    where: { userId, targetId: hintId, type: 'HINTS' },
-  })
+  const { data: existing } = await supabase
+    .from('unlocks')
+    .select('*')
+    .eq('user_id', userId)
+    .eq('target_id', hintId)
+    .eq('type', 'HINTS')
+    .single()
 
   if (existing) {
     return { unlocked: true, already: true }
   }
 
-  await prisma.unlock.create({
-    data: {
-      userId,
-      teamId,
-      targetId: hintId,
-      type: 'HINTS',
-    },
+  await supabase.from('unlocks').insert({
+    user_id: userId,
+    team_id: teamId,
+    target_id: hintId,
+    type: 'HINTS',
   })
 
   return { unlocked: true, already: false }
@@ -909,11 +1092,19 @@ export async function unlockHint(
 export async function listChallengeFiles(
   challengeId: string
 ): Promise<Array<{ id: string; location: string; createdAt: Date }>> {
-  return prisma.file.findMany({
-    where: { challengeId },
-    select: { id: true, location: true, createdAt: true },
-    orderBy: { createdAt: 'asc' },
-  })
+  const { data, error } = await supabase
+    .from('files')
+    .select('id, location, created_at')
+    .eq('challenge_id', challengeId)
+    .order('created_at', { ascending: true })
+
+  if (error) throw error
+
+  return (data ?? []).map((f: any) => ({
+    id: f.id,
+    location: f.location,
+    createdAt: new Date(f.created_at),
+  }))
 }
 
 export async function listSolvesByChallenge(challengeId: string): Promise<
@@ -924,28 +1115,26 @@ export async function listSolvesByChallenge(challengeId: string): Promise<
     team?: { id: string; name: string } | null
   }>
 > {
-  const solves = await prisma.solve.findMany({
-    where: { challengeId },
-    include: {
-      user: { select: { id: true, name: true } },
-      team: { select: { id: true, name: true } },
-    },
-    orderBy: { createdAt: 'desc' },
-    take: 100,
-  })
-  return solves.map(
-    (s: {
-      id: string
-      createdAt: Date
-      user: { id: string; name: string } | null
-      team: { id: string; name: string } | null
-    }) => ({
-      id: s.id,
-      createdAt: s.createdAt,
-      user: s.user ? { id: s.user.id, name: s.user.name } : null,
-      team: s.team ? { id: s.team.id, name: s.team.name } : null,
-    })
-  )
+  const { data, error } = await supabase
+    .from('solves')
+    .select(`
+      id,
+      created_at,
+      user:users(id, name),
+      team:teams(id, name)
+    `)
+    .eq('challenge_id', challengeId)
+    .order('created_at', { ascending: false })
+    .limit(100)
+
+  if (error) throw error
+
+  return (data ?? []).map((s: any) => ({
+    id: s.id,
+    createdAt: new Date(s.created_at),
+    user: s.user ? { id: s.user.id, name: s.user.name } : null,
+    team: s.team ? { id: s.team.id, name: s.team.name } : null,
+  }))
 }
 
 export async function listMySubmissions(userId: string): Promise<
@@ -956,25 +1145,21 @@ export async function listMySubmissions(userId: string): Promise<
     createdAt: Date
   }>
 > {
-  const subs = await prisma.submission.findMany({
-    where: { userId },
-    include: { challenge: { select: { id: true, name: true } } },
-    orderBy: { createdAt: 'desc' },
-    take: 200,
-  })
-  return subs.map(
-    (s: {
-      id: string
-      createdAt: Date
-      status: 'CORRECT' | 'INCORRECT' | 'PENDING'
-      challenge: { id: string; name: string } | null
-    }) => ({
-      id: s.id,
-      challenge: s.challenge!,
-      status: s.status as 'CORRECT' | 'INCORRECT' | 'PENDING',
-      createdAt: s.createdAt,
-    })
-  )
+  const { data, error } = await supabase
+    .from('submissions')
+    .select('id, status, created_at, challenge:challenges(id, name)')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false })
+    .limit(200)
+
+  if (error) throw error
+
+  return (data ?? []).map((s: any) => ({
+    id: s.id,
+    challenge: s.challenge,
+    status: s.status as 'CORRECT' | 'INCORRECT' | 'PENDING',
+    createdAt: new Date(s.created_at),
+  }))
 }
 
 export async function listRatingsByChallenge(challengeId: string): Promise<{
@@ -989,49 +1174,35 @@ export async function listRatingsByChallenge(challengeId: string): Promise<{
     createdAt: Date
   }>
 }> {
-  const [agg, grouped, items] = await Promise.all([
-    prisma.rating.aggregate({
-      where: { challengeId },
-      _avg: { value: true },
-      _count: { value: true },
-    }),
-    prisma.rating.groupBy({
-      where: { challengeId },
-      by: ['value'],
-      _count: { value: true },
-    }),
-    prisma.rating.findMany({
-      where: { challengeId },
-      include: { user: { select: { id: true, name: true } } },
-      orderBy: { createdAt: 'desc' },
-      take: 20,
-    }),
-  ])
+  const { data: ratings, error } = await supabase
+    .from('ratings')
+    .select('*, user:users(id, name)')
+    .eq('challenge_id', challengeId)
+    .order('created_at', { ascending: false })
+    .limit(20)
 
-  const average = Number(agg._avg.value ?? 0)
-  const count = Number(agg._count.value ?? 0)
+  if (error) throw error
+
+  const values = (ratings ?? []).map((r: any) => r.value)
+  const average = values.length > 0 ? values.reduce((a: number, b: number) => a + b, 0) / values.length : 0
+  const count = values.length
+
   const breakdown: Record<number, number> = {}
-  for (const g of grouped) breakdown[g.value] = g._count.value
+  values.forEach((v: number) => {
+    breakdown[v] = (breakdown[v] || 0) + 1
+  })
 
   return {
     average,
     count,
     breakdown,
-    items: items.map(
-      (r: {
-        id: string
-        value: number
-        review: string | null
-        createdAt: Date
-        user: { id: string; name: string }
-      }) => ({
-        id: r.id,
-        value: r.value,
-        review: r.review ?? null,
-        user: { id: r.user.id, name: r.user.name },
-        createdAt: r.createdAt,
-      })
-    ),
+    items: (ratings ?? []).map((r: any) => ({
+      id: r.id,
+      value: r.value,
+      review: r.review ?? null,
+      user: { id: r.user.id, name: r.user.name },
+      createdAt: new Date(r.created_at),
+    })),
   }
 }
 
@@ -1045,37 +1216,43 @@ export async function upsertRating(
   count: number
   breakdown: Record<number, number>
 }> {
-  // Prisma upsert doesn't support composite unique directly; emulate
-  const existing = await prisma.rating.findFirst({
-    where: { userId, challengeId },
-  })
+  // Check if rating exists
+  const { data: existing } = await supabase
+    .from('ratings')
+    .select('id')
+    .eq('user_id', userId)
+    .eq('challenge_id', challengeId)
+    .single()
+
   if (existing) {
-    await prisma.rating.update({
-      where: { id: existing.id },
-      data: { value, review: review ?? null },
-    })
+    await supabase
+      .from('ratings')
+      .update({ value, review: review ?? null })
+      .eq('id', existing.id)
   } else {
-    await prisma.rating.create({
-      data: { userId, challengeId, value, review: review ?? null },
+    await supabase.from('ratings').insert({
+      user_id: userId,
+      challenge_id: challengeId,
+      value,
+      review: review ?? null,
     })
   }
+
   // Return updated aggregate
-  const [agg, grouped] = await Promise.all([
-    prisma.rating.aggregate({
-      where: { challengeId },
-      _avg: { value: true },
-      _count: { value: true },
-    }),
-    prisma.rating.groupBy({
-      where: { challengeId },
-      by: ['value'],
-      _count: { value: true },
-    }),
-  ])
-  const average = Number(agg._avg.value ?? 0)
-  const count = Number(agg._count.value ?? 0)
+  const { data: ratings } = await supabase
+    .from('ratings')
+    .select('value')
+    .eq('challenge_id', challengeId)
+
+  const values = (ratings ?? []).map((r: any) => r.value)
+  const average = values.length > 0 ? values.reduce((a: number, b: number) => a + b, 0) / values.length : 0
+  const count = values.length
+
   const breakdown: Record<number, number> = {}
-  for (const g of grouped) breakdown[g.value] = g._count.value
+  values.forEach((v: number) => {
+    breakdown[v] = (breakdown[v] || 0) + 1
+  })
+
   return { average, count, breakdown }
 }
 
@@ -1089,25 +1266,21 @@ export async function listCommentsByChallenge(
     createdAt: Date
   }>
 > {
-  const comments = await prisma.comment.findMany({
-    where: { challengeId },
-    include: { user: { select: { id: true, name: true } } },
-    orderBy: { createdAt: 'desc' },
-    take: 50,
-  })
-  return comments.map(
-    (c: {
-      id: string
-      content: string
-      createdAt: Date
-      user: { id: string; name: string }
-    }) => ({
-      id: c.id,
-      content: c.content,
-      user: { id: c.user.id, name: c.user.name },
-      createdAt: c.createdAt,
-    })
-  )
+  const { data, error } = await supabase
+    .from('comments')
+    .select('id, content, created_at, user:users(id, name)')
+    .eq('challenge_id', challengeId)
+    .order('created_at', { ascending: false })
+    .limit(50)
+
+  if (error) throw error
+
+  return (data ?? []).map((c: any) => ({
+    id: c.id,
+    content: c.content,
+    user: { id: c.user.id, name: c.user.name },
+    createdAt: new Date(c.created_at),
+  }))
 }
 
 export async function createChallengeComment(
@@ -1115,9 +1288,14 @@ export async function createChallengeComment(
   challengeId: string,
   content: string
 ) {
-  return prisma.comment.create({
-    data: { userId: authorId, challengeId, content },
-  })
+  const { data, error } = await supabase
+    .from('comments')
+    .insert({ user_id: authorId, challenge_id: challengeId, content })
+    .select()
+    .single()
+
+  if (error) throw error
+  return data
 }
 
 export async function deleteComment(
@@ -1125,18 +1303,33 @@ export async function deleteComment(
   requesterId: string,
   role: 'ADMIN' | 'USER'
 ): Promise<boolean> {
-  const comment = await prisma.comment.findUnique({ where: { id: commentId } })
+  const { data: comment } = await supabase
+    .from('comments')
+    .select('user_id')
+    .eq('id', commentId)
+    .single()
+
   if (!comment) return false
-  if (role !== 'ADMIN' && comment.userId !== requesterId) {
-    // Not authorized to delete
+
+  if (role !== 'ADMIN' && comment.user_id !== requesterId) {
     return false
   }
-  await prisma.comment.delete({ where: { id: commentId } })
+
+  const { error } = await supabase.from('comments').delete().eq('id', commentId)
+  if (error) return false
+
   return true
 }
 
 export async function getSolutionByChallenge(challengeId: string) {
-  return prisma.solution.findUnique({ where: { challengeId } })
+  const { data, error } = await supabase
+    .from('solutions')
+    .select('*')
+    .eq('challenge_id', challengeId)
+    .single()
+
+  if (error && error.code !== 'PGRST116') throw error
+  return data
 }
 
 export async function createSolution(
@@ -1144,33 +1337,55 @@ export async function createSolution(
   content: string,
   state?: string | null
 ) {
-  // Enforce single solution per challenge
-  const existing = await prisma.solution.findUnique({ where: { challengeId } })
+  // Check if solution exists
+  const { data: existing } = await supabase
+    .from('solutions')
+    .select('id')
+    .eq('challenge_id', challengeId)
+    .single()
+
   if (existing) {
-    return prisma.solution.update({
-      where: { id: existing.id },
-      data: { content, state: state ?? null },
-    })
+    const { data, error } = await supabase
+      .from('solutions')
+      .update({ content, state: state ?? null })
+      .eq('id', existing.id)
+      .select()
+      .single()
+
+    if (error) throw error
+    return data
   }
-  return prisma.solution.create({
-    data: { challengeId, content, state: state ?? null },
-  })
+
+  const { data, error } = await supabase
+    .from('solutions')
+    .insert({ challenge_id: challengeId, content, state: state ?? null })
+    .select()
+    .single()
+
+  if (error) throw error
+  return data
 }
 
 export async function updateSolution(
   id: string,
   data: Partial<{ content: string; state: string | null }>
 ) {
-  return prisma.solution.update({ where: { id }, data })
+  const { data: solution, error } = await supabase
+    .from('solutions')
+    .update(data)
+    .eq('id', id)
+    .select()
+    .single()
+
+  if (error) throw error
+  return solution
 }
 
 export async function deleteSolution(id: string) {
-  await prisma.solution.delete({ where: { id } })
+  await supabase.from('solutions').delete().eq('id', id)
 }
 
-// -----------------------------
-// Files: minimal helpers (Phase 1)
-// -----------------------------
+// Files: minimal helpers
 
 export async function createFileAndAttachToChallenge(
   challengeId: string,
@@ -1186,12 +1401,20 @@ export async function createFileAndAttachToChallenge(
   challengeId: string
   createdAt: Date
 }> {
-  // Note: current schema tracks only location + challengeId.
-  // sha1sum/contentType/name are ignored for now but accepted for forward-compat.
-  return prisma.file.create({
-    data: { challengeId, location: info.location },
-    select: { id: true, location: true, challengeId: true, createdAt: true },
-  })
+  const { data, error } = await supabase
+    .from('files')
+    .insert({ challenge_id: challengeId, location: info.location })
+    .select()
+    .single()
+
+  if (error) throw error
+
+  return {
+    id: data.id,
+    location: data.location,
+    challengeId: data.challenge_id,
+    createdAt: new Date(data.created_at),
+  }
 }
 
 export async function getFileById(
@@ -1202,21 +1425,27 @@ export async function getFileById(
   challengeId: string
   createdAt: Date
 } | null> {
-  return prisma.file.findUnique({
-    where: { id },
-    select: { id: true, location: true, challengeId: true, createdAt: true },
-  })
+  const { data, error } = await supabase
+    .from('files')
+    .select('*')
+    .eq('id', id)
+    .single()
+
+  if (error && error.code !== 'PGRST116') throw error
+  if (!data) return null
+
+  return {
+    id: data.id,
+    location: data.location,
+    challengeId: data.challenge_id,
+    createdAt: new Date(data.created_at),
+  }
 }
 
 export async function deleteFileById(id: string): Promise<boolean> {
-  try {
-    await prisma.file.delete({ where: { id } })
-    return true
-  } catch (e: unknown) {
-    const code = (e as { code?: string })?.code
-    if (code === 'P2025') return false // not found
-    throw e
-  }
+  const { error } = await supabase.from('files').delete().eq('id', id)
+  if (error) return false
+  return true
 }
 
 // Dynamic Scoring Helpers
@@ -1224,32 +1453,27 @@ export async function deleteFileById(id: string): Promise<boolean> {
 export async function computeChallengeValue(
   challengeId: string
 ): Promise<number> {
-  // Fetch challenge scoring params and current persisted value
-  const challenge = await prisma.challenge.findUnique({
-    where: { id: challengeId },
-    select: {
-      id: true,
-      type: true,
-      function: true,
-      points: true,
-      minimum: true,
-      decay: true,
-      value: true,
-    },
-  })
+  const { data: challenge } = await supabase
+    .from('challenges')
+    .select('id, type, function, points, minimum, decay, value')
+    .eq('id', challengeId)
+    .single()
 
   if (!challenge) {
     throw new Error('Challenge not found')
   }
 
-  // If not dynamic or set to static, return current persisted value (fallback to points)
   const current = challenge.value ?? challenge.points
   if (challenge.type !== 'DYNAMIC' || challenge.function === 'static') {
     return current
   }
 
-  const solves = await prisma.solve.count({ where: { challengeId } })
+  const { count } = await supabase
+    .from('solves')
+    .select('*', { count: 'exact', head: true })
+    .eq('challenge_id', challengeId)
 
+  const solves = count ?? 0
   const initial = Number(challenge.points ?? 0)
   let minimum = Number(challenge.minimum ?? 0)
   let decay = Number(challenge.decay ?? 0)
@@ -1263,13 +1487,11 @@ export async function computeChallengeValue(
 
   switch (challenge.function) {
     case 'log': {
-      // value = max(minimum, floor(initial - (log2(solves + 1) * decay)))
       const penalty = Math.log2(solves + 1) * decay
       value = Math.max(minimum, Math.floor(initial - penalty))
       break
     }
     case 'exp': {
-      // value = max(minimum, floor(initial * Math.pow(decay, solves)))  // decay in (0,1]
       let d = decay
       if (!Number.isFinite(d)) d = 1
       d = Math.min(1, Math.max(0, d))
@@ -1277,17 +1499,14 @@ export async function computeChallengeValue(
       break
     }
     case 'linear': {
-      // value = max(minimum, floor(initial - (decay * solves)))
       value = Math.max(minimum, Math.floor(initial - decay * solves))
       break
     }
     default: {
-      // Unknown function -> keep current
       value = current
     }
   }
 
-  // Enforce bounds and coerce invalid to current value
   if (!Number.isFinite(value) || Number.isNaN(value)) return current
   if (value > initial) value = initial
   if (value < minimum) value = minimum
@@ -1298,15 +1517,16 @@ export async function computeChallengeValue(
 export async function updateChallengeValue(
   challengeId: string
 ): Promise<{ previous: number | null; updated: number | null }> {
-  const challenge = await prisma.challenge.findUnique({
-    where: { id: challengeId },
-    select: { id: true, type: true, value: true },
-  })
+  const { data: challenge } = await supabase
+    .from('challenges')
+    .select('id, type, value')
+    .eq('id', challengeId)
+    .single()
+
   if (!challenge) {
     throw new Error('Challenge not found')
   }
 
-  // Only persist dynamic challenge values
   if (challenge.type !== 'DYNAMIC') {
     const prev = challenge.value ?? null
     return { previous: prev, updated: prev }
@@ -1319,11 +1539,12 @@ export async function updateChallengeValue(
     return { previous, updated: previous }
   }
 
-  const updated = await prisma.challenge.update({
-    where: { id: challengeId },
-    data: { value: computed },
-    select: { value: true },
-  })
+  const { data: updated } = await supabase
+    .from('challenges')
+    .update({ value: computed })
+    .eq('id', challengeId)
+    .select('value')
+    .single()
 
-  return { previous, updated: updated.value ?? null }
+  return { previous, updated: updated?.value ?? null }
 }

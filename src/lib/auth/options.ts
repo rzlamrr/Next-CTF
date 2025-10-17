@@ -1,13 +1,13 @@
 import { type NextAuthOptions } from 'next-auth'
 import CredentialsProvider from 'next-auth/providers/credentials'
-import { PrismaAdapter } from '@next-auth/prisma-adapter'
-import { prisma } from '@/lib/db'
+import { SupabaseAdapter } from './supabase-adapter'
+import { supabase } from '@/lib/db'
 import { compare } from 'bcryptjs'
 import { type JWT } from 'next-auth/jwt'
 import { type Session, type User as NextAuthUser } from 'next-auth'
 
 export const authOptions: NextAuthOptions = {
-  adapter: PrismaAdapter(prisma),
+  adapter: SupabaseAdapter(),
   providers: [
     CredentialsProvider({
       name: 'credentials',
@@ -33,11 +33,11 @@ export const authOptions: NextAuthOptions = {
           return null
         }
 
-        const user = await prisma.user.findFirst({
-          where: {
-            OR: [{ email: identifier }, { name: identifier }],
-          },
-        })
+        const { data: user } = await supabase
+          .from('users')
+          .select('*')
+          .or(`email.eq.${identifier},name.eq.${identifier}`)
+          .single()
 
         console.info('[NextAuth][authorize] user lookup', {
           found: !!user,

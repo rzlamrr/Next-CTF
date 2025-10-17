@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll } from '@jest/globals'
 import { GET as getChallengeItem } from '@/app/api/challenges/[id]/route'
-import { prisma } from '@/lib/db'
+import { supabase } from '@/lib/db'
 import { resetDb, seedBasic, makeUrl } from './utils'
 
 type Item = {
@@ -27,19 +27,36 @@ describe('API /api/challenges/:id (item)', () => {
     stdId = seeded.stdChallenge.id
     dynId = seeded.dynChallenge.id
 
-    // Attach some tags/topics and hints to standard challenge
-    await prisma.tag.create({ data: { name: 'web', color: '#00f' } })
-    await prisma.topic.create({
-      data: { name: 'SQL Injection', category: 'Web' },
-    })
-    await prisma.challenge.update({
-      where: { id: stdId },
-      data: {
-        tags: { connect: [{ name: 'web' }] },
-        topics: { connect: [{ name: 'SQL Injection' }] },
-        hints: { create: [{ title: 'Hint1', content: 'Try union', cost: 10 }] },
-      },
-    })
+    // Create tag and topic
+    const { data: tag } = await supabase
+      .from('tags')
+      .insert({ name: 'web', color: '#00f' })
+      .select('id')
+      .single()
+
+    const { data: topic } = await supabase
+      .from('topics')
+      .insert({ name: 'SQL Injection', category: 'Web' })
+      .select('id')
+      .single()
+
+    // Attach tag and topic to challenge
+    if (tag) {
+      await supabase
+        .from('challenge_tags')
+        .insert({ challenge_id: stdId, tag_id: tag.id })
+    }
+
+    if (topic) {
+      await supabase
+        .from('challenge_topics')
+        .insert({ challenge_id: stdId, topic_id: topic.id })
+    }
+
+    // Add hint to challenge
+    await supabase
+      .from('hints')
+      .insert({ challenge_id: stdId, title: 'Hint1', content: 'Try union', cost: 10 })
   })
 
   it('returns item with display value and shaped relational fields (STANDARD)', async () => {

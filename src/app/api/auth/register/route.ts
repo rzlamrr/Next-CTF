@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { prisma } from '@/lib/db'
+import { createUser, getUserByEmail } from '@/lib/db/queries'
 import { hash } from 'bcryptjs'
 import { registerSchema } from '@/lib/validations'
 
@@ -19,9 +19,7 @@ export async function POST(request: NextRequest) {
     const { name, email, password } = validatedFields.data
 
     // Check if user already exists
-    const existingUser = await prisma.user.findUnique({
-      where: { email },
-    })
+    const existingUser = await getUserByEmail(email)
 
     if (existingUser) {
       return NextResponse.json(
@@ -34,13 +32,11 @@ export async function POST(request: NextRequest) {
     const hashedPassword = await hash(password, 12)
 
     // Create user
-    const user = await prisma.user.create({
-      data: {
-        name,
-        email,
-        password: hashedPassword,
-        role: 'USER',
-      },
+    const user = await createUser({
+      name,
+      email,
+      password: hashedPassword,
+      role: 'USER',
     })
 
     // Return success response without password

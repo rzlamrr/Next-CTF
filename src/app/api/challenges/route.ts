@@ -10,12 +10,12 @@
  * POST /api/challenges
  * - Admin only
  * - Body: ChallengeCreateSchema
- * - Creates challenge with connectOrCreate for tags/topics via DB helper
+ * - Creates challenge
  */
 
 import { ok, err, toErrorResponse, parseJson } from '@/lib/utils/http'
 import { listChallenges, createChallenge } from '@/lib/db/queries'
-import { prisma } from '@/lib/db'
+import { supabase } from '@/lib/db'
 import { requireAdmin } from '@/lib/auth/guards'
 import { ChallengeCreateSchema } from '@/lib/validations/challenge'
 import { getServerSession } from 'next-auth'
@@ -54,33 +54,34 @@ export async function GET(req: Request): Promise<Response> {
     const ids = challenges.map((c: { id: string }) => c.id)
     let counts: Record<string, number> = {}
     if (ids.length) {
-      const grouped = await prisma.solve.groupBy({
-        by: ['challengeId'],
-        where: { challengeId: { in: ids } },
-        _count: { challengeId: true },
-      })
-      counts = Object.fromEntries(
-        grouped.map(
-          (g: { challengeId: string; _count: { challengeId: number } }) => [
-            g.challengeId,
-            g._count.challengeId,
-          ]
-        )
-      )
+      // Get solve counts for each challenge using Supabase
+      const { data: solves, error } = await supabase
+        .from('solves')
+        .select('challenge_id')
+        .in('challenge_id', ids)
+
+      if (!error && solves) {
+        // Count solves per challenge
+        counts = solves.reduce((acc: Record<string, number>, solve: { challenge_id: string }) => {
+          acc[solve.challenge_id] = (acc[solve.challenge_id] || 0) + 1
+          return acc
+        }, {} as Record<string, number>)
+      }
     }
 
     // Check if user is authenticated and get their solved challenges
     const session = await getServerSession(authOptions)
     let userSolvedIds: Set<string> = new Set()
     if (session?.user?.id && ids.length) {
-      const userSolves = await prisma.solve.findMany({
-        where: {
-          userId: session.user.id,
-          challengeId: { in: ids },
-        },
-        select: { challengeId: true },
-      })
-      userSolvedIds = new Set(userSolves.map(s => s.challengeId))
+      const { data: userSolves, error } = await supabase
+        .from('solves')
+        .select('challenge_id')
+        .eq('user_id', session.user.id)
+        .in('challenge_id', ids)
+
+      if (!error && userSolves) {
+        userSolvedIds = new Set(userSolves.map((s: { challenge_id: string }) => s.challenge_id))
+      }
     }
 
     const data = challenges.map(
@@ -143,8 +144,6 @@ export async function POST(req: Request): Promise<Response> {
       bracketId: body.bracketId ?? null,
       connectionInfo: body.connectionInfo ?? null,
       requirements: body.requirements ?? null,
-      tagNames: body.tags ?? [],
-      topicNames: body.topics ?? [],
     }
 
     const created = await createChallenge(payload)

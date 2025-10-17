@@ -4,7 +4,8 @@ import {
   PATCH as patchNotifications,
 } from '@/app/api/notifications/route'
 import { POST as postAdminNotifications } from '@/app/api/admin/notifications/route'
-import { prisma } from '@/lib/db'
+import { supabase } from '@/lib/db'
+import { createUser, createNotification } from '@/lib/db/queries'
 import { resetDb, seedBasic, jsonRequest, readJson } from './utils'
 import type { GuardUser } from '@/lib/auth/guards'
 
@@ -23,22 +24,20 @@ describe('API /api/notifications (user)', () => {
     user = seeded.user
 
     // Seed some notifications for the user
-    await prisma.notification.createMany({
-      data: [
-        {
-          userId: user.id,
-          title: 'Welcome',
-          content: 'Hello user!',
-          read: false,
-        },
-        {
-          userId: user.id,
-          title: 'Update',
-          content: 'New challenge added',
-          read: false,
-        },
-      ],
-    })
+    await supabase.from('notifications').insert([
+      {
+        user_id: user.id,
+        title: 'Welcome',
+        content: 'Hello user!',
+        read: false,
+      },
+      {
+        user_id: user.id,
+        title: 'Update',
+        content: 'New challenge added',
+        read: false,
+      },
+    ])
   })
 
   afterAll(async () => {
@@ -83,11 +82,12 @@ describe('API /api/notifications (user)', () => {
   it('marks selected notifications as read via PATCH', async () => {
     global.setMockSession({ id: user.id, email: user.email, role: 'USER' })
 
-    const current = await prisma.notification.findMany({
-      where: { userId: user.id },
-      select: { id: true },
-    })
-    const ids = current.map((n: { id: string }) => n.id)
+    const { data: current } = await supabase
+      .from('notifications')
+      .select('id')
+      .eq('user_id', user.id)
+
+    const ids = (current || []).map((n: { id: string }) => n.id)
     const req = jsonRequest('PATCH', '/api/notifications', { ids })
     const res = await patchNotifications(req)
     expect(res.status).toBe(200)
@@ -99,11 +99,12 @@ describe('API /api/notifications (user)', () => {
     expect(body.success).toBe(true)
     expect(body.data.updatedCount).toBe(ids.length)
 
-    const after = await prisma.notification.findMany({
-      where: { userId: user.id },
-      select: { read: true },
-    })
-    expect(after.every((n: { read: boolean }) => n.read === true)).toBe(true)
+    const { data: after } = await supabase
+      .from('notifications')
+      .select('read')
+      .eq('user_id', user.id)
+
+    expect((after || []).every((n: { read: boolean }) => n.read === true)).toBe(true)
   })
 })
 
@@ -155,27 +156,27 @@ describe('API /api/admin/notifications (admin broadcast)', () => {
     expect(body.data.target).toBe('USER')
     expect(body.data.createdCount).toBe(1)
 
-    const rows = await prisma.notification.findMany({
-      where: { userId: user.id, title: 'Personal' },
-    })
-    expect(rows.length).toBe(1)
+    const { data: rows } = await supabase
+      .from('notifications')
+      .select('*')
+      .eq('user_id', user.id)
+      .eq('title', 'Personal')
+
+    expect((rows || []).length).toBe(1)
   })
 
   it('broadcasts to ALL users', async () => {
     global.setMockSession({ id: admin.id, email: admin.email, role: 'ADMIN' })
 
     // Add another user to ensure multiple recipients
-    const other = await prisma.user.create({
-      data: {
-        name: 'other',
-        email: 'other@example.com',
-        password: 'hashed',
-        role: 'USER',
-      },
-      select: { id: true },
+    const other = await createUser({
+      name: 'other',
+      email: 'other@example.com',
+      password: 'hashed',
+      role: 'USER',
     })
 
-    const users = await prisma.user.findMany({ select: { id: true } })
+    const { data: users } = await supabase.from('users').select('id')
 
     const req = jsonRequest('POST', '/api/admin/notifications', {
       title: 'Global',
@@ -191,32 +192,38 @@ describe('API /api/admin/notifications (admin broadcast)', () => {
     }>(res)
     expect(body.success).toBe(true)
     expect(body.data.target).toBe('ALL')
-    expect(body.data.createdCount).toBe(users.length)
+    expect(body.data.createdCount).toBe((users || []).length)
 
-    const rows = await prisma.notification.findMany({
-      where: { title: 'Global' },
-    })
-    expect(rows.length).toBe(users.length)
+    const { data: rows } = await supabase
+      .from('notifications')
+      .select('*')
+      .eq('title', 'Global')
+
+    expect((rows || []).length).toBe((users || []).length)
   })
 
   it('broadcasts to TEAM members', async () => {
     global.setMockSession({ id: admin.id, email: admin.email, role: 'ADMIN' })
 
     // Create a team and attach the regular user
-    const team = await prisma.team.create({
-      data: { name: 'Broadcast Team', description: 't', captainId: admin.id },
-      select: { id: true },
-    })
-    await prisma.user.update({
-      where: { id: user.id },
-      data: { teamId: team.id },
-    })
+    const { data: team } = await supabase
+      .from('teams')
+      .insert({ name: 'Broadcast Team', description: 't', captain_id: admin.id })
+      .select('id')
+      .single()
+
+    if (team) {
+      await supabase
+        .from('users')
+        .update({ team_id: team.id })
+        .eq('id', user.id)
+    }
 
     const req = jsonRequest('POST', '/api/admin/notifications', {
       title: 'TeamMsg',
       body: 'Hello team',
       target: 'TEAM',
-      teamId: team.id,
+      teamId: team?.id,
     })
     const res = await postAdminNotifications(req)
     expect(res.status).toBe(201)
@@ -229,9 +236,11 @@ describe('API /api/admin/notifications (admin broadcast)', () => {
     expect(body.data.target).toBe('TEAM')
     expect(body.data.createdCount).toBeGreaterThanOrEqual(1)
 
-    const rows = await prisma.notification.findMany({
-      where: { title: 'TeamMsg' },
-    })
-    expect(rows.length).toBeGreaterThanOrEqual(1)
+    const { data: rows } = await supabase
+      .from('notifications')
+      .select('*')
+      .eq('title', 'TeamMsg')
+
+    expect((rows || []).length).toBeGreaterThanOrEqual(1)
   })
 })

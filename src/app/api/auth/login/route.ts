@@ -1,6 +1,6 @@
 import { ok, err, toErrorResponse, parseJson } from '@/lib/utils/http'
 import { loginSchema } from '@/lib/validations'
-import { prisma } from '@/lib/db'
+import { supabase } from '@/lib/db'
 import { compare } from 'bcryptjs'
 
 /**
@@ -26,17 +26,20 @@ export async function POST(req: Request): Promise<Response> {
       passwordPresent: !!password,
     })
 
-    const user = await prisma.user.findFirst({
-      where: { OR: [{ email: identifier }, { name: identifier }] },
-    })
+    const { data: user, error } = await supabase
+      .from('users')
+      .select('*')
+      .or(`email.eq.${identifier},name.eq.${identifier}`)
+      .single()
 
     console.info('[API][login] user lookup', {
       found: !!user,
       userId: user?.id,
       email: user?.email,
+      error: error?.message,
     })
 
-    if (!user) {
+    if (error || !user) {
       console.warn('[API][login] invalid credentials - no user', { identifier })
       return err(
         'INVALID_CREDENTIALS',

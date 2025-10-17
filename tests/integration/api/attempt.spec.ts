@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from '@jest/globals'
 import { POST as postAttempt } from '@/app/api/challenges/attempt/route'
-import { prisma } from '@/lib/db'
+import { supabase } from '@/lib/db'
 import { resetDb, seedBasic, jsonRequest, readJson } from './utils'
 import type { GuardUser } from '@/lib/auth/guards'
 
@@ -49,7 +49,10 @@ describe('API /api/challenges/attempt', () => {
     global.setMockSession({ id: user.id, email: user.email, role: 'USER' })
 
     // Ensure starting score is 0
-    const preSolves = await prisma.solve.count({ where: { userId: user.id } })
+    const { count: preSolves } = await supabase
+      .from('solves')
+      .select('*', { count: 'exact', head: true })
+      .eq('user_id', user.id)
     expect(preSolves).toBe(0)
 
     const req = jsonRequest('POST', '/api/challenges/attempt', {
@@ -69,9 +72,11 @@ describe('API /api/challenges/attempt', () => {
     expect(body.data.newScore).toBeUndefined()
 
     // No solve recorded
-    const postSolves = await prisma.solve.count({
-      where: { userId: user.id, challengeId: stdChallenge.id },
-    })
+    const { count: postSolves } = await supabase
+      .from('solves')
+      .select('*', { count: 'exact', head: true })
+      .eq('user_id', user.id)
+      .eq('challenge_id', stdChallenge.id)
     expect(postSolves).toBe(0)
   })
 
@@ -96,9 +101,11 @@ describe('API /api/challenges/attempt', () => {
     expect(body.data.newScore).toBeGreaterThanOrEqual(stdChallenge.points)
 
     // Solve recorded exactly once
-    const solves = await prisma.solve.count({
-      where: { userId: user.id, challengeId: stdChallenge.id },
-    })
+    const { count: solves } = await supabase
+      .from('solves')
+      .select('*', { count: 'exact', head: true })
+      .eq('user_id', user.id)
+      .eq('challenge_id', stdChallenge.id)
     expect(solves).toBe(1)
   })
 
@@ -112,9 +119,11 @@ describe('API /api/challenges/attempt', () => {
     const res = await postAttempt(req)
     expect(res.status).toBe(200)
 
-    const solves = await prisma.solve.count({
-      where: { userId: user.id, challengeId: stdChallenge.id },
-    })
+    const { count: solves } = await supabase
+      .from('solves')
+      .select('*', { count: 'exact', head: true })
+      .eq('user_id', user.id)
+      .eq('challenge_id', stdChallenge.id)
     expect(solves).toBe(1)
   })
 
@@ -137,9 +146,12 @@ describe('API /api/challenges/attempt', () => {
     expect(typeof body.data.newScore).toBe('number')
 
     // Ensure a solve exists
-    const solve = await prisma.solve.findFirst({
-      where: { userId: user.id, challengeId: dynChallenge.id },
-    })
+    const { data: solve } = await supabase
+      .from('solves')
+      .select('*')
+      .eq('user_id', user.id)
+      .eq('challenge_id', dynChallenge.id)
+      .single()
     expect(solve).toBeTruthy()
   })
 })

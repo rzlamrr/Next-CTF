@@ -172,7 +172,7 @@ export default function ChallengeFilters({ className }: ChallengeFiltersProps) {
               type="text"
               value={search}
               onChange={e => onSearchChange(e.target.value)}
-              placeholder="Find challenges by name or tags"
+              placeholder="Find challenges by name"
               className="mt-1 block w-full rounded-md border border-input bg-background px-2.5 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background"
             />
           </div>

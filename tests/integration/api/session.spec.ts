@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from '@jest/globals'
 import { GET as getSession } from '@/app/api/session/route'
-import { prisma } from '@/lib/db'
+import { supabase } from '@/lib/db'
+import { createUser } from '@/lib/db/queries'
 import type { GuardUser } from '@/lib/auth/guards'
 
 // Types aligned with guards
@@ -18,36 +19,33 @@ describe('API /api/session', () => {
 
   beforeAll(async () => {
     // Reset DB to deterministic state
-    await prisma.solve.deleteMany()
-    await prisma.submission.deleteMany()
-    await prisma.notification.deleteMany()
-    await prisma.account.deleteMany()
-    await prisma.session.deleteMany()
-    await prisma.comment.deleteMany()
-    await prisma.fieldEntry.deleteMany()
-    await prisma.field.deleteMany()
-    await prisma.solution.deleteMany()
-    await prisma.rating.deleteMany()
-    await prisma.file.deleteMany()
-    await prisma.challenge.deleteMany()
-    await prisma.team.deleteMany()
-    await prisma.user.deleteMany()
+    await supabase.from('solves').delete().neq('id', '00000000-0000-0000-0000-000000000000')
+    await supabase.from('submissions').delete().neq('id', '00000000-0000-0000-0000-000000000000')
+    await supabase.from('notifications').delete().neq('id', '00000000-0000-0000-0000-000000000000')
+    await supabase.from('accounts').delete().neq('id', '00000000-0000-0000-0000-000000000000')
+    await supabase.from('sessions').delete().neq('id', '00000000-0000-0000-0000-000000000000')
+    await supabase.from('comments').delete().neq('id', '00000000-0000-0000-0000-000000000000')
+    await supabase.from('field_entries').delete().neq('id', '00000000-0000-0000-0000-000000000000')
+    await supabase.from('fields').delete().neq('id', '00000000-0000-0000-0000-000000000000')
+    await supabase.from('solutions').delete().neq('id', '00000000-0000-0000-0000-000000000000')
+    await supabase.from('ratings').delete().neq('id', '00000000-0000-0000-0000-000000000000')
+    await supabase.from('files').delete().neq('id', '00000000-0000-0000-0000-000000000000')
+    await supabase.from('challenges').delete().neq('id', '00000000-0000-0000-0000-000000000000')
+    await supabase.from('teams').delete().neq('id', '00000000-0000-0000-0000-000000000000')
+    await supabase.from('users').delete().neq('id', '00000000-0000-0000-0000-000000000000')
 
-    const admin = await prisma.user.create({
-      data: {
-        name: 'rizal',
-        email: 'rizal@example.com',
-        password: 'hashed',
-        role: 'ADMIN',
-      },
+    const admin = await createUser({
+      name: 'rizal',
+      email: 'rizal@example.com',
+      password: 'hashed',
+      role: 'ADMIN',
     })
-    const user = await prisma.user.create({
-      data: {
-        name: 'icank',
-        email: 'icank@example.com',
-        password: 'hashed',
-        role: 'USER',
-      },
+
+    const user = await createUser({
+      name: 'icank',
+      email: 'icank@example.com',
+      password: 'hashed',
+      role: 'USER',
     })
 
     adminId = admin.id

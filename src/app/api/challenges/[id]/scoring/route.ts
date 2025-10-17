@@ -12,9 +12,8 @@
 
 import { ok, err, toErrorResponse, parseJson } from '@/lib/utils/http'
 import { requireAdmin } from '@/lib/auth/guards'
-import { prisma } from '@/lib/db'
+import { updateChallenge, getChallengeById, updateChallengeValue } from '@/lib/db/queries'
 import { ChallengeUpdateSchema } from '@/lib/validations/challenge'
-import { updateChallengeValue } from '@/lib/db/queries'
 import { logInfo, logError, logDebug } from '@/lib/utils/log'
 
 // PATCH /api/challenges/:id/scoring
@@ -64,20 +63,8 @@ export async function PATCH(
     }
 
     // Update challenge scoring params
-    const updated = await prisma.challenge.update({
-      where: { id },
-      data: updateData,
-      select: {
-        id: true,
-        type: true,
-        function: true,
-        points: true,
-        minimum: true,
-        decay: true,
-        value: true,
-        updatedAt: true,
-      },
-    })
+    const updated = await updateChallenge(id, updateData)
+
     logInfo('api/challenges/scoring', 'UPDATED_PARAMS', {
       id: updated.id,
       type: updated.type,
@@ -92,19 +79,7 @@ export async function PATCH(
     logInfo('api/challenges/scoring', 'VALUE_RECALCULATED', { id })
 
     // Refetch current after recalculation
-    const current = await prisma.challenge.findUnique({
-      where: { id },
-      select: {
-        id: true,
-        type: true,
-        function: true,
-        points: true,
-        minimum: true,
-        decay: true,
-        value: true,
-        updatedAt: true,
-      },
-    })
+    const current = await getChallengeById(id)
 
     if (!current) {
       return err('NOT_FOUND', 'Challenge not found after update', 404)
@@ -118,7 +93,7 @@ export async function PATCH(
       initial: current.points,
       minimum: current.minimum ?? 0,
       decay: current.decay ?? 0,
-      updatedAt: current.updatedAt,
+      updatedAt: current.updated_at,
     }
 
     return ok(response, 200)

@@ -22,8 +22,6 @@ type ChallengeDetail = {
   category: string
   difficulty: Difficulty
   type: CType
-  tags: string[]
-  topics: string[]
   hints: Array<{ id: string; cost: number }>
 }
 
@@ -158,9 +156,9 @@ export default function ChallengeModal({
       })
   }, [challengeId, activeTab])
 
-  // Fetch files when switching to files tab
+  // Fetch files when modal opens
   React.useEffect(() => {
-    if (!challengeId || activeTab !== 'files') return
+    if (!isOpen || !challengeId) return
 
     setFilesLoading(true)
     fetch(`/api/challenges/${encodeURIComponent(challengeId)}/files`, {
@@ -169,14 +167,18 @@ export default function ChallengeModal({
       .then(async res => {
         const json = (await res.json()) as Envelope<FileItem[]>
         if (json.success) {
-          setFiles(json.data)
+          setFiles(json.data ?? [])
+        } else {
+          setFiles([])
         }
       })
-      .catch(() => {})
+      .catch(() => {
+        setFiles([])
+      })
       .finally(() => {
         setFilesLoading(false)
       })
-  }, [challengeId, activeTab])
+  }, [isOpen, challengeId])
 
   // Handle backdrop click to close
   React.useEffect(() => {
@@ -308,19 +310,6 @@ export default function ChallengeModal({
                   <i className="fas fa-users mr-2"></i>
                   {solves.length} Solve{solves.length !== 1 ? 's' : ''}
                 </button>
-                {files.length > 0 && (
-                  <button
-                    onClick={() => setActiveTab('files')}
-                    className={`px-4 py-3 text-sm font-medium transition-colors border-b-2 ${
-                      activeTab === 'files'
-                        ? 'border-primary text-primary bg-primary/5'
-                        : 'border-transparent text-muted-foreground hover:text-foreground hover:border-muted'
-                    }`}
-                  >
-                    <i className="fas fa-file mr-2"></i>
-                    Files
-                  </button>
-                )}
               </nav>
             </div>
 
@@ -337,27 +326,6 @@ export default function ChallengeModal({
                     <Badge color="gray">{data.type}</Badge>
                   </div>
 
-                  {/* Tags */}
-                  {(data.tags?.length > 0 || data.topics?.length > 0) && (
-                    <div className="flex flex-wrap items-center justify-center gap-2">
-                      {data.tags?.map(tag => (
-                        <span
-                          key={`tag-${tag}`}
-                          className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-info/20 text-info border border-info/30"
-                        >
-                          {tag}
-                        </span>
-                      ))}
-                      {data.topics?.map(topic => (
-                        <span
-                          key={`topic-${topic}`}
-                          className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-success/20 text-success border border-success/30"
-                        >
-                          {topic}
-                        </span>
-                      ))}
-                    </div>
-                  )}
 
                   {/* Description */}
                   <div className="rounded-lg border border-border bg-muted/30 p-6">
@@ -365,6 +333,34 @@ export default function ChallengeModal({
                       {data.description}
                     </div>
                   </div>
+
+                  {/* Attached Files */}
+                  {filesLoading ? (
+                    <div className="rounded-lg border border-border bg-card p-6">
+                      <div className="text-sm text-muted-foreground">Loading files...</div>
+                    </div>
+                  ) : files.length > 0 ? (
+                    <div className="rounded-lg border border-border bg-card p-6">
+                      <h3 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2">
+                        <i className="fas fa-file text-primary"></i>
+                        Attachments
+                      </h3>
+                      <ul className="mt-2 space-y-2">
+                        {files.map(file => {
+                          const base = file.location.split('/').pop() || ''
+                          const filename = base.split('-').slice(2).join('-') || base
+                          const href = `/api/files/${encodeURIComponent(file.id)}/download`
+                          return (
+                            <li key={file.id}>
+                              <a href={href} className="text-sm text-primary hover:underline">
+                                {filename}
+                              </a>
+                            </li>
+                          )
+                        })}
+                      </ul>
+                    </div>
+                  ) : null}
 
                   {/* Submit Flag */}
                   <div className="rounded-lg border border-primary/30 bg-primary/5 p-6">
@@ -465,43 +461,6 @@ export default function ChallengeModal({
                 </div>
               )}
 
-              {activeTab === 'files' && (
-                <div className="p-6">
-                  {filesLoading ? (
-                    <div className="flex items-center justify-center py-12">
-                      <div className="text-sm text-muted-foreground">
-                        Loading files...
-                      </div>
-                    </div>
-                  ) : files.length === 0 ? (
-                    <div className="text-center py-12">
-                      <i className="fas fa-file text-4xl text-muted-foreground/30 mb-3"></i>
-                      <p className="text-sm text-muted-foreground">
-                        No files attached.
-                      </p>
-                    </div>
-                  ) : (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                      {files.map(file => {
-                        const filename = file.location.split('/').pop() || 'file'
-                        return (
-                          <a
-                            key={file.id}
-                            href={file.location}
-                            download
-                            className="flex items-center gap-3 p-4 rounded-lg border border-border bg-card hover:bg-muted hover:border-primary transition-all group"
-                          >
-                            <i className="fas fa-download text-lg text-primary group-hover:scale-110 transition-transform"></i>
-                            <span className="text-sm text-foreground font-medium truncate">
-                              {filename}
-                            </span>
-                          </a>
-                        )
-                      })}
-                    </div>
-                  )}
-                </div>
-              )}
             </div>
           </>
         )}

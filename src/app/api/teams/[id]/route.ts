@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
-import { prisma } from '@/lib/db'
+import { supabase } from '@/lib/db'
 import { getTeamById } from '@/lib/db/queries'
 import { hash } from 'bcryptjs'
 
@@ -65,9 +65,14 @@ export async function PATCH(
     }
 
     const { id } = await context.params
-    const team = await prisma.team.findUnique({ where: { id } })
 
-    if (!team) {
+    const { data: team, error } = await supabase
+      .from('teams')
+      .select('*')
+      .eq('id', id)
+      .single()
+
+    if (error || !team) {
       return NextResponse.json(
         {
           success: false,
@@ -78,7 +83,7 @@ export async function PATCH(
     }
 
     // Only captain can edit
-    if (team.captainId !== session.user.id) {
+    if (team.captain_id !== session.user.id) {
       return NextResponse.json(
         {
           success: false,
@@ -117,10 +122,14 @@ export async function PATCH(
       updateData.password = password ? await hash(password.trim(), 12) : null
     }
 
-    const updated = await prisma.team.update({
-      where: { id },
-      data: updateData,
-    })
+    const { data: updated, error: updateError } = await supabase
+      .from('teams')
+      .update(updateData)
+      .eq('id', id)
+      .select()
+      .single()
+
+    if (updateError) throw updateError
 
     return NextResponse.json({
       success: true,
@@ -158,9 +167,14 @@ export async function DELETE(
     }
 
     const { id } = await context.params
-    const team = await prisma.team.findUnique({ where: { id } })
 
-    if (!team) {
+    const { data: team, error } = await supabase
+      .from('teams')
+      .select('*')
+      .eq('id', id)
+      .single()
+
+    if (error || !team) {
       return NextResponse.json(
         {
           success: false,
@@ -171,7 +185,7 @@ export async function DELETE(
     }
 
     // Only captain can delete
-    if (team.captainId !== session.user.id) {
+    if (team.captain_id !== session.user.id) {
       return NextResponse.json(
         {
           success: false,
@@ -182,13 +196,20 @@ export async function DELETE(
     }
 
     // Remove all members from team first
-    await prisma.user.updateMany({
-      where: { teamId: id },
-      data: { teamId: null },
-    })
+    const { error: updateError } = await supabase
+      .from('users')
+      .update({ team_id: null })
+      .eq('team_id', id)
+
+    if (updateError) throw updateError
 
     // Delete team
-    await prisma.team.delete({ where: { id } })
+    const { error: deleteError } = await supabase
+      .from('teams')
+      .delete()
+      .eq('id', id)
+
+    if (deleteError) throw deleteError
 
     return NextResponse.json({
       success: true,

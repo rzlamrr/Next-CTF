@@ -68,7 +68,7 @@ export async function GET(request: Request): Promise<Response> {
     console.log('listUsers returned', users.length, 'users')
     
     // Transform the data for public consumption
-    const publicUsers = users.map(user => ({
+    const publicUsers = users.map((user: any) => ({
       id: user.id,
       name: user.name,
       website: (user as any).website || null,

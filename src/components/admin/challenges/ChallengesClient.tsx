@@ -32,8 +32,6 @@ type ChallengeDetail = {
   function: 'static' | 'log' | 'exp' | 'linear'
   minimum: number | null
   decay: number | null
-  tags: string[]
-  topics: string[]
   hints: { id: string; cost: number }[]
 }
 
