@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useState, useEffect } from 'react'
+import { redirect } from 'next/navigation'
 import GradientBanner from '@/components/ui/gradient-banner'
 import { DataTable } from '@/components/admin/DataTable'
 import { Pagination } from '@/components/ui/pagination'
@@ -31,10 +32,10 @@ function fetchUsers(
     take: String(take),
     skip: String(skip),
   })
-  
+
   if (q) params.append('q', q)
   if (filter) params.append('filter', filter)
-  
+
   const url = `${base}/api/users?${params.toString()}`
   console.log('Fetching users from:', url)
 
@@ -42,12 +43,18 @@ function fetchUsers(
     .then(res => {
       console.log('Users API response status:', res.status)
       if (!res.ok) {
+        // Check if it's an authentication error
+        if (res.status === 401) {
+          window.location.href = '/auth/login?callbackUrl=/users'
+          return null
+        }
         console.error('Users API request failed with status:', res.status)
         return null
       }
       return res.json()
     })
-    .then((json: Envelope<UserRow[]>) => {
+    .then((json: Envelope<UserRow[]> | null) => {
+      if (!json) return null
       console.log('Users API response:', json)
       if (json.success) {
         // Fetch one extra record (take = pageSize + 1) to detect if a next page exists

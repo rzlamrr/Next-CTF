@@ -791,12 +791,15 @@ export async function setConfig(
 ) {
   const { data, error } = await supabase
     .from('configs')
-    .upsert({
-      key,
-      value,
-      type,
-      description: description ?? null,
-    })
+    .upsert(
+      {
+        key,
+        value,
+        type,
+        description: description ?? null,
+      },
+      { onConflict: 'key' }
+    )
     .select()
     .single()
 

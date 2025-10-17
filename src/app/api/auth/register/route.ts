@@ -2,9 +2,19 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createUser, getUserByEmail } from '@/lib/db/queries'
 import { hash } from 'bcryptjs'
 import { registerSchema } from '@/lib/validations'
+import { isRegistrationEnabled } from '@/lib/auth/visibility'
 
 export async function POST(request: NextRequest) {
   try {
+    // Check if registration is enabled
+    const regEnabled = await isRegistrationEnabled()
+    if (!regEnabled) {
+      return NextResponse.json(
+        { message: 'Registration is currently disabled. Please contact an administrator.' },
+        { status: 403 }
+      )
+    }
+
     const body = await request.json()
 
     // Validate input

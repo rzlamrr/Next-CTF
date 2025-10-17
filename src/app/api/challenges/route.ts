@@ -2,7 +2,7 @@
  * Challenges - Collection API
  *
  * GET /api/challenges?category=web&type=STANDARD&difficulty=BEGINNER&bracket=xxx&search=foo
- * - Public
+ * - Visibility controlled by challenges_visibility setting
  * - Query params: category, type, difficulty, bracket, search
  * - Response example:
  *   { "success": true, "data": [ { "id": "...", "name": "...", "value": 100, "category": "web", "solveCount": 3 } ] }
@@ -20,6 +20,7 @@ import { requireAdmin } from '@/lib/auth/guards'
 import { ChallengeCreateSchema } from '@/lib/validations/challenge'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth/options'
+import { canAccessChallenges } from '@/lib/auth/visibility'
 
 type Difficulty = 'EASY' | 'MEDIUM' | 'HARD' | 'INSANE'
 type CType = 'STANDARD' | 'DYNAMIC'
@@ -27,6 +28,12 @@ type CType = 'STANDARD' | 'DYNAMIC'
 // GET /api/challenges
 export async function GET(req: Request): Promise<Response> {
   try {
+    // Check if user has access to challenges
+    const hasAccess = await canAccessChallenges()
+    if (!hasAccess) {
+      return err('UNAUTHORIZED', 'Access to challenges requires authentication', 401)
+    }
+
     const url = new URL(req.url)
     const search = url.searchParams.get('search') ?? undefined
     const category = url.searchParams.get('category') ?? undefined

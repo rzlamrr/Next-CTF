@@ -2,7 +2,7 @@
  * Scoreboard API
  *
  * GET /api/scoreboard?top=number
- * - Public
+ * - Visibility controlled by scoreboard_visibility setting
  * - Returns user and team leaderboards ordered by score (desc)
  * - Respects optional ?top param (default 50)
  *
@@ -17,19 +17,26 @@
  *   }
  */
 
-import { ok, toErrorResponse } from '@/lib/utils/http'
+import { ok, err, toErrorResponse } from '@/lib/utils/http'
 import {
   listUsers,
   listTeams,
   getUserScore,
   getTeamScore,
 } from '@/lib/db/queries'
+import { canAccessScoreboard } from '@/lib/auth/visibility'
 
 type UserRow = { id: string; name: string; teamId: string | null }
 type TeamRow = { id: string; name: string }
 
 export async function GET(req: Request): Promise<Response> {
   try {
+    // Check if user has access to scoreboard
+    const hasAccess = await canAccessScoreboard()
+    if (!hasAccess) {
+      return err('UNAUTHORIZED', 'Access to scoreboard requires authentication', 401)
+    }
+
     const url = new URL(req.url)
     const topParam = url.searchParams.get('top')
     const parsed = topParam ? parseInt(topParam, 10) : NaN

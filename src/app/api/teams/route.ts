@@ -8,10 +8,23 @@ import {
   getConfig,
 } from '@/lib/db/queries'
 import { hash } from 'bcryptjs'
+import { canAccessAccounts } from '@/lib/auth/visibility'
 
 // GET /api/teams - List all teams
 export async function GET(req: NextRequest) {
   try {
+    // Check if user has access to accounts (teams)
+    const hasAccess = await canAccessAccounts()
+    if (!hasAccess) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: { code: 'UNAUTHORIZED', message: 'Access to teams requires authentication' },
+        },
+        { status: 401 }
+      )
+    }
+
     const { searchParams } = new URL(req.url)
     console.log('Teams API called with params:', Object.fromEntries(searchParams.entries()))
     

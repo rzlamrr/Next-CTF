@@ -2,7 +2,7 @@
  * Users API
  *
  * GET /api/users
- *   - Public endpoint (no auth required)
+ *   - Visibility controlled by accounts_visibility setting
  *   - Returns a paginated list of users
  *   - Query params: take (default: 50), skip (default: 0), q (search query), filter (username|country|affiliation)
  *   Response: { "success": true, "data": [{ id, name, website, affiliation, country }] }
@@ -10,9 +10,16 @@
 
 import { listUsers } from '@/lib/db/queries'
 import { ok, err, toErrorResponse } from '@/lib/utils/http'
+import { canAccessAccounts } from '@/lib/auth/visibility'
 
 export async function GET(request: Request): Promise<Response> {
   try {
+    // Check if user has access to accounts
+    const hasAccess = await canAccessAccounts()
+    if (!hasAccess) {
+      return err('UNAUTHORIZED', 'Access to user accounts requires authentication', 401)
+    }
+
     const { searchParams } = new URL(request.url)
     console.log('Users API called with params:', Object.fromEntries(searchParams.entries()))
     

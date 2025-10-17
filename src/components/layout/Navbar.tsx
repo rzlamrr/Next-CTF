@@ -15,6 +15,10 @@ export async function Navbar() {
   const teamModeConfig = await getConfig('team_mode')
   const teamModeEnabled = teamModeConfig?.value?.toLowerCase() === 'true'
 
+  // Check if registration is enabled
+  const registrationConfig = await getConfig('registration_enabled')
+  const registrationEnabled = registrationConfig?.value?.toLowerCase() === 'true'
+
   return (
     <header className="sticky top-0 z-40 border-b border-border bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60 shadow-sm">
       <div className="mx-auto max-w-6xl px-4 py-4 flex items-center gap-6">
@@ -60,11 +64,13 @@ export async function Navbar() {
               >
                 Login
               </Link>
-              <Link href="/auth/register">
-                <Button variant="default" size="sm">
-                  Register
-                </Button>
-              </Link>
+              {registrationEnabled && (
+                <Link href="/auth/register">
+                  <Button variant="default" size="sm">
+                    Register
+                  </Button>
+                </Link>
+              )}
             </>
           )}
         </nav>

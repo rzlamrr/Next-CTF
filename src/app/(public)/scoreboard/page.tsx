@@ -1,5 +1,7 @@
+import { redirect } from 'next/navigation'
 import GradientBanner from '@/components/ui/gradient-banner'
 import { getConfig } from '@/lib/db/queries'
+import { canAccessScoreboard } from '@/lib/auth/visibility'
 
 type SuccessEnvelope<T> = { success: true; data: T }
 type ErrorEnvelope = {
@@ -96,6 +98,13 @@ export default async function Page({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>
 }) {
+  // Check if user has access to scoreboard
+  const hasAccess = await canAccessScoreboard()
+
+  if (!hasAccess) {
+    redirect('/auth/login?callbackUrl=/scoreboard')
+  }
+
   const sp = await searchParams
   const rawTop = Array.isArray(sp.top) ? sp.top[0] : sp.top
   const parsed = rawTop ? parseInt(rawTop, 10) : NaN

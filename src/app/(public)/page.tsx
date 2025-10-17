@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import GradientBanner from '@/components/ui/gradient-banner'
+import { isRegistrationEnabled } from '@/lib/auth/visibility'
 
 type SuccessEnvelope<T> = { success: true; data: T }
 type ErrorEnvelope = {
@@ -40,6 +41,7 @@ async function fetchSession(): Promise<SessionUser | null> {
 
 export default async function Page() {
   const session = await fetchSession()
+  const registrationEnabled = await isRegistrationEnabled()
 
   const siteName = 'CyberStorm CTF'
   const tagline =
@@ -70,12 +72,22 @@ export default async function Page() {
                 Go to Profile
               </Link>
             ) : (
-              <Link
-                href="/auth/login"
-                className="inline-flex items-center rounded-lg bg-primary px-5 py-3 text-base font-semibold text-primary-foreground shadow-soft hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background"
-              >
-                Login
-              </Link>
+              <>
+                <Link
+                  href="/auth/login"
+                  className="inline-flex items-center rounded-lg bg-primary px-5 py-3 text-base font-semibold text-primary-foreground shadow-soft hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background"
+                >
+                  Login
+                </Link>
+                {registrationEnabled && (
+                  <Link
+                    href="/auth/register"
+                    className="inline-flex items-center rounded-lg bg-background px-5 py-3 text-base font-semibold text-foreground ring-1 ring-inset ring-border hover:bg-muted hover:text-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background"
+                  >
+                    Register
+                  </Link>
+                )}
+              </>
             )}
           </div>
 

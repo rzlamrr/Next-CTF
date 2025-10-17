@@ -58,12 +58,18 @@ function fetchTeams(
     .then(res => {
       console.log('Teams API response status:', res.status)
       if (!res.ok) {
+        // Check if it's an authentication error
+        if (res.status === 401) {
+          window.location.href = '/auth/login?callbackUrl=/teams'
+          return null
+        }
         console.error('Teams API request failed with status:', res.status)
         return null
       }
       return res.json()
     })
-    .then((json: Envelope<Team[]>) => {
+    .then((json: Envelope<Team[]> | null) => {
+      if (!json) return null
       console.log('Teams API response:', json)
       if (json.success) {
         // For now, we'll estimate the total since we don't have a count endpoint

@@ -5,9 +5,11 @@ import { Button } from '@/components/ui/button'
 import GeometricBackground from '@/components/ui/geometric-background'
 import Image from 'next/image'
 import { Navbar, Footer } from '@/components/layout'
+import { isRegistrationEnabled } from '@/lib/auth/visibility'
 
 export default async function Home() {
   const session = await getServerSession(authOptions)
+  const registrationEnabled = await isRegistrationEnabled()
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -42,35 +44,24 @@ export default async function Home() {
 
           {/* CTAs */}
           <div className="flex flex-col items-center gap-4 sm:flex-row">
-            {session ? (
-              <Link href="/challenges">
+            <Link href="/challenges">
+              <Button
+                size="lg"
+                className="bg-red-600 px-8 py-6 text-base font-semibold uppercase tracking-wide text-white hover:bg-red-700"
+              >
+                → Enter Hub
+              </Button>
+            </Link>
+            {!session && registrationEnabled && (
+              <Link href="/auth/register">
                 <Button
                   size="lg"
-                  className="bg-red-600 px-8 py-6 text-base font-semibold uppercase tracking-wide text-white hover:bg-red-700"
+                  variant="outline"
+                  className="border-2 border-gray-600 bg-transparent px-8 py-6 text-base font-semibold uppercase tracking-wide text-white hover:border-gray-400 hover:bg-gray-800/50"
                 >
-                  → Enter Hub
+                  ⚡ Register
                 </Button>
               </Link>
-            ) : (
-              <>
-                <Link href="/challenges">
-                  <Button
-                    size="lg"
-                    className="bg-red-600 px-8 py-6 text-base font-semibold uppercase tracking-wide text-white hover:bg-red-700"
-                  >
-                    → Enter Hub
-                  </Button>
-                </Link>
-                <Link href="/auth/register">
-                  <Button
-                    size="lg"
-                    variant="outline"
-                    className="border-2 border-gray-600 bg-transparent px-8 py-6 text-base font-semibold uppercase tracking-wide text-white hover:border-gray-400 hover:bg-gray-800/50"
-                  >
-                    ⚡ Register
-                  </Button>
-                </Link>
-              </>
             )}
           </div>
         </div>
