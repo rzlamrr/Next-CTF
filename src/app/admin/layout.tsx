@@ -1,22 +1,33 @@
-'use client'
-
 import React from 'react'
 import Link from 'next/link'
-import { AdminNav } from '@/components/layout'
+import { redirect } from 'next/navigation'
+import { getServerSession } from 'next-auth'
+import { authOptions } from '@/lib/auth'
+import { AdminNavWrapper } from '@/components/admin/AdminNavWrapper'
 import { ThemeToggle } from '@/components/ui/theme-toggle'
 import NotificationsBell from '@/components/ui/notifications-bell'
 import { SiteLogoClient } from '@/components/ui/site-logo-client'
 
-export default function AdminLayout({
+export default async function AdminLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
-  const [sidebarOpen, setSidebarOpen] = React.useState(false)
+  // Server-side auth check
+  const session = await getServerSession(authOptions)
+
+  if (!session?.user) {
+    redirect('/auth/login?callbackUrl=/admin')
+  }
+
+  const userRole = (session.user as any)?.role
+  if (userRole !== 'ADMIN') {
+    redirect('/')
+  }
 
   return (
     <div className="min-h-screen bg-background text-foreground">
-      <AdminNav isOpen={sidebarOpen} onToggle={setSidebarOpen} />
+      <AdminNavWrapper />
       <div className="md:ml-64">
         {/* Top navbar - consistent with public pages */}
         <header className="sticky top-0 z-30 border-b border-border bg-background shadow-sm">
@@ -25,7 +36,6 @@ export default function AdminLayout({
               type="button"
               className="inline-flex items-center justify-center rounded-md border border-input bg-background p-2 text-sm font-medium text-foreground shadow-sm hover:bg-accent focus:outline-none focus:ring-2 focus:ring-ring md:hidden"
               aria-label="Toggle sidebar"
-              onClick={() => setSidebarOpen(v => !v)}
             >
               <svg
                 className="h-5 w-5"
@@ -67,3 +77,4 @@ export default function AdminLayout({
     </div>
   )
 }
+
