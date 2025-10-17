@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { signIn } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
@@ -28,6 +28,7 @@ type LoginFormProps = {
 export default function LoginForm({ registrationEnabled, error }: LoginFormProps) {
   const [isLoading, setIsLoading] = useState(false)
   const router = useRouter()
+  const toastShownRef = useRef(false)
 
   const {
     register,
@@ -38,8 +39,9 @@ export default function LoginForm({ registrationEnabled, error }: LoginFormProps
   })
 
   useEffect(() => {
-    if (error === 'registration_disabled') {
+    if (error === 'registration_disabled' && !toastShownRef.current) {
       toast.error('Registration is currently disabled. Please contact an administrator.')
+      toastShownRef.current = true
     }
   }, [error])
 

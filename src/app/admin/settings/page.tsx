@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
 import AdminNotificationForm from '@/components/admin/AdminNotificationForm'
+import SettingsSavedToast from '@/components/admin/SettingsSavedToast'
 
 type SearchParams = { [key: string]: string | string[] | undefined }
 
@@ -86,21 +87,12 @@ export default async function SettingsPage({
     redirect('/admin/settings?saved=1')
   }
 
-  const params = await searchParams
-  const saved =
-    (Array.isArray(params?.saved) ? params?.saved[0] : params?.saved) === '1'
-
   return (
     <div className="space-y-6">
+      <SettingsSavedToast />
       <h1 className="text-lg font-semibold text-gray-900 dark:text-white">
         Settings
       </h1>
-
-      {saved ? (
-        <div className="rounded-md border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-800 dark:border-green-900/50 dark:bg-green-950/40 dark:text-green-300">
-          Settings saved
-        </div>
-      ) : null}
 
       <form action={updateSettings} className="space-y-6">
         <div className="grid grid-cols-1 gap-6">
