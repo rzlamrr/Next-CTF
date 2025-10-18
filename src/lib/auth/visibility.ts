@@ -28,13 +28,18 @@ export function canAccess(
   visibilityMode: VisibilityMode,
   context: VisibilityContext
 ): boolean {
+  // Admins always have access to everything
+  if (context.isAdmin) {
+    return true
+  }
+
   switch (visibilityMode) {
     case 'public':
       return true
     case 'private':
       return context.isAuthenticated
     case 'admin':
-      return context.isAdmin
+      return false // Non-admins cannot access admin-only resources
     default:
       return false
   }

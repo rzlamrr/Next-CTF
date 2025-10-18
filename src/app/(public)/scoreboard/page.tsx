@@ -1,14 +1,13 @@
 import { redirect } from 'next/navigation'
 import GradientBanner from '@/components/ui/gradient-banner'
-import { getConfig } from '@/lib/db/queries'
+import {
+  getConfig,
+  listUsers,
+  listTeams,
+  getUserScore,
+  getTeamScore,
+} from '@/lib/db/queries'
 import { canAccessScoreboard } from '@/lib/auth/visibility'
-
-type SuccessEnvelope<T> = { success: true; data: T }
-type ErrorEnvelope = {
-  success: false
-  error: { code: string; message: string }
-}
-type Envelope<T> = SuccessEnvelope<T> | ErrorEnvelope
 
 type UserRow = {
   id: string
@@ -21,17 +20,38 @@ type TeamRow = { id: string; name: string; score: number }
 async function fetchScoreboard(
   top: number
 ): Promise<{ users: UserRow[]; teams: TeamRow[] } | null> {
-  const base = process.env.NEXT_PUBLIC_BASE_URL ?? ''
-  const url = `${base}/api/scoreboard?top=${encodeURIComponent(String(top))}`
-
   try {
-    const res = await fetch(url, { cache: 'no-store' })
-    const json = (await res.json()) as Envelope<{
-      users: UserRow[]
-      teams: TeamRow[]
-    }>
-    if (json.success) return json.data
-    return null
+    // Fetch users/teams directly from database
+    const usersRaw = await listUsers({ take: 2000, skip: 0 })
+    const teamsRaw = await listTeams({ take: 2000, skip: 0 })
+
+    // Shape minimal rows
+    const users: Array<Omit<UserRow, 'score'>> = usersRaw.map((u: any) => ({
+      id: u.id as string,
+      name: (u.name as string) ?? '',
+      teamId: (u.teamId as string | null) ?? null,
+    }))
+    const teams: Array<Omit<TeamRow, 'score'>> = teamsRaw.map((t: any) => ({
+      id: t.id as string,
+      name: (t.name as string) ?? '',
+    }))
+
+    // Compute scores concurrently
+    const userScores = await Promise.all(
+      users.map(async u => ({ ...u, score: await getUserScore(u.id) }))
+    )
+    const teamScores = await Promise.all(
+      teams.map(async t => ({ ...t, score: await getTeamScore(t.id) }))
+    )
+
+    // Order desc by score and take top N
+    userScores.sort((a, b) => b.score - a.score)
+    teamScores.sort((a, b) => b.score - a.score)
+
+    return {
+      users: userScores.slice(0, top),
+      teams: teamScores.slice(0, top),
+    }
   } catch {
     return null
   }
