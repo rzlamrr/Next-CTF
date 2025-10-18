@@ -28,10 +28,17 @@ type CType = 'STANDARD' | 'DYNAMIC'
 // GET /api/challenges
 export async function GET(req: Request): Promise<Response> {
   try {
-    // Check if user has access to challenges
-    const hasAccess = await canAccessChallenges()
-    if (!hasAccess) {
-      return err('UNAUTHORIZED', 'Access to challenges requires authentication', 401)
+    // Get session to check if user is admin
+    const session = await getServerSession(authOptions)
+    const isAdmin = (session?.user as any)?.role === 'ADMIN'
+
+    // Admins can always access all challenges regardless of visibility settings
+    // For non-admins, check visibility settings
+    if (!isAdmin) {
+      const hasAccess = await canAccessChallenges()
+      if (!hasAccess) {
+        return err('UNAUTHORIZED', 'Access to challenges requires authentication', 401)
+      }
     }
 
     const url = new URL(req.url)
@@ -77,7 +84,6 @@ export async function GET(req: Request): Promise<Response> {
     }
 
     // Check if user is authenticated and get their solved challenges
-    const session = await getServerSession(authOptions)
     let userSolvedIds: Set<string> = new Set()
     if (session?.user?.id && ids.length) {
       const { data: userSolves, error } = await supabase
